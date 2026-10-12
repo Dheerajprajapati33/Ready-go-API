@@ -1,0 +1,22 @@
+import { Router } from "express";
+import { requireAuth, allowRoles } from "../../middleware/auth.js";
+import User from "../../models/User.js";
+import DriverProfile from "../../models/DriverProfile.js";
+import { ok, fail } from "../../utils/apiResponse.js";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+const router=Router();
+router.get("/admin/driver-applications",requireAuth,allowRoles("admin"),asyncHandler(async(req,res)=>ok(res,await DriverProfile.find(req.query.status?{applicationStatus:req.query.status}:{}).sort({createdAt:-1}).limit(100))));
+router.get("/admin/driver-applications/:id",requireAuth,allowRoles("admin"),asyncHandler(async(req,res)=>{const p=await DriverProfile.findById(req.params.id).populate("userId","fullName phone email");if(!p)return fail(res,404,"Application not found","NOT_FOUND");return ok(res,p);}));
+router.post("/admin/driver-applications/:id/review",requireAuth,allowRoles("admin"),asyncHandler(async(req,res)=>{
+ const allowed=["APPROVED","REJECTED","ACTION_REQUIRED","UNDER_REVIEW"];
+ if(!allowed.includes(req.body.status))return fail(res,400,"Invalid review status","VALIDATION_ERROR");
+ const p=await DriverProfile.findByIdAndUpdate(req.params.id,{applicationStatus:req.body.status},{new:true});
+ if(!p)return fail(res,404,"Application not found","NOT_FOUND");
+ return ok(res,p,"Application reviewed");
+}));
+router.get("/admin/audit-logs",requireAuth,allowRoles("admin"),(req,res)=>ok(res,{items:[],note:"Persist admin audit logs before enabling this endpoint in production"}));
+router.get("/admin/rides",requireAuth,allowRoles("admin"),(req,res)=>ok(res,{items:[],note:"Add indexed search filters and pagination"}));
+router.post("/admin/rides/:id/assign",requireAuth,allowRoles("admin"),(req,res)=>fail(res,501,"Dispatch assignment service is not configured","NOT_IMPLEMENTED"));
+router.post("/admin/promos",requireAuth,allowRoles("admin"),(req,res)=>fail(res,501,"Promo management module is not configured","NOT_IMPLEMENTED"));
+router.patch("/admin/fare-rules/:id",requireAuth,allowRoles("admin"),(req,res)=>fail(res,501,"Persisted fare rules module is not configured","NOT_IMPLEMENTED"));
+export default router;
