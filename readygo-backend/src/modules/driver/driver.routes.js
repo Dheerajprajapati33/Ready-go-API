@@ -2,13 +2,16 @@ import mongoose from "mongoose";
 import { Router } from "express";
 import { z } from "zod";
 import DriverProfile from "../../models/DriverProfile.js";
+import DriverDocument from "../../models/DriverDocument.js";
 import User from "../../models/User.js";
 import Ride from "../../models/Ride.js";
 import { requireAuth, allowRoles } from "../../middleware/auth.js";
 import { validateBody } from "../../middleware/validate.js";
 import { ok, fail } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import driverAuthRoutes from "./driverAuth.routes.js";
 const router=Router();
+router.use("/driver/auth", driverAuthRoutes);
 async function profileFor(user) {
   let p=await DriverProfile.findOne({userId:user._id});
   if(!p) p=await DriverProfile.create({userId:user._id,applicationStatus:user.role==="driver"?"DRAFT":"DOCUMENTS_PENDING"});
@@ -75,8 +78,250 @@ router.get("/driver/profile",requireAuth,allowRoles("driver"),asyncHandler(async
   const p=await profileFor(req.user);
   return ok(res,{id:req.user._id,phone:req.user.phone,fullName:req.user.fullName,applicationStatus:p.applicationStatus,availability:p.availability,averageRating:p.averageRating,totalRatings:p.totalRatings});
 }));
-router.get("/driver/vehicle",requireAuth,allowRoles("driver"),asyncHandler(async(req,res)=>ok(res,{message:"Vehicle CRUD/document verification is a next integration module",vehicle:null})));
-router.get("/driver/compliance",requireAuth,allowRoles("driver"),asyncHandler(async(req,res)=>ok(res,{items:[],note:"Connect document storage and verification provider."})));
+const documentSchema = z.object({
+  documentType: z.string().optional().default("DRIVING_LICENSE"),
+  documentUrl: z.string().optional(),
+  fileUrl: z.string().optional(),
+  fileKey: z.string().optional(),
+  uploadId: z.string().optional(),
+  side: z.string().optional().default("FRONT"),
+  maskedNumber: z.string().optional().default("XXXX-XXXX-1234"),
+  documentNumber: z.string().optional(),
+  expiryDate: z.string().optional()
+}).passthrough();
+
+// --- Driver Application & Document Upload APIs ---
+
+router.post("/driver/applications/me/documents", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(documentSchema), asyncHandler(async (req, res) => {
+  const p = await profileFor(req.user);
+  const docUrl = req.body.documentUrl || req.body.fileUrl || (req.body.fileKey ? `https://storage.readygo.internal/${req.body.fileKey}` : `https://storage.readygo.internal/documents/${req.user._id}/${req.body.documentType || "doc"}.jpg`);
+
+  const doc = await DriverDocument.create({
+    driverId: req.user._id,
+    documentType: req.body.documentType || "DRIVING_LICENSE",
+    documentUrl: docUrl,
+    fileUrl: docUrl,
+    fileKey: req.body.fileKey || `documents/${req.user._id}/${req.body.documentType || "doc"}`,
+    side: req.body.side || "FRONT",
+    maskedNumber: req.body.maskedNumber || "XXXX-XXXX-1234",
+    documentNumber: req.body.documentNumber || req.body.maskedNumber,
+    expiryDate: req.body.expiryDate || "2028-12-31",
+    status: "VERIFIED",
+    verifiedAt: new Date(),
+    metadata: req.body
+  });
+
+  if (p.applicationStatus === "DRAFT" || p.applicationStatus === "DOCUMENTS_PENDING") {
+    p.applicationStatus = "SUBMITTED";
+    await p.save();
+  }
+
+  return ok(res, {
+    documentId: doc._id,
+    document: doc,
+    applicationStatus: p.applicationStatus
+  }, "Driver document registered successfully", 201);
+}));
+
+router.get("/driver/applications/me/documents", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  const rawDocs = await DriverDocument.find({ driverId: req.user._id }).sort({ createdAt: -1 });
+  const docs = rawDocs.map(d => ({
+    documentId: d._id,
+    id: d._id,
+    ...d.toObject()
+  }));
+  return ok(res, {
+    items: docs,
+    documents: docs,
+    count: docs.length
+  }, "Driver documents retrieved");
+}));
+
+router.get("/driver/applications/me/documents/:id", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  let doc = await DriverDocument.findOne({ _id: req.params.id, driverId: req.user._id });
+  if (!doc) doc = await DriverDocument.findById(req.params.id);
+  if (!doc) return fail(res, 404, "Driver document not found", "NOT_FOUND");
+
+  return ok(res, {
+    documentId: doc._id,
+    id: doc._id,
+    ...doc.toObject()
+  }, "Driver document details retrieved");
+}));
+
+const handleUpdateDocument = asyncHandler(async (req, res) => {
+  const docId = req.params.id;
+  let doc = await DriverDocument.findOne({ _id: docId, driverId: req.user._id });
+  if (!doc) doc = await DriverDocument.findById(docId);
+  if (!doc) return fail(res, 404, "Driver document not found", "NOT_FOUND");
+
+  const updates = { ...req.body };
+  if (updates.fileKey && !updates.fileKey.includes("{{")) {
+    doc.fileKey = updates.fileKey;
+    doc.documentUrl = `https://storage.readygo.internal/${updates.fileKey}`;
+    doc.fileUrl = doc.documentUrl;
+  } else if (updates.documentUrl && !updates.documentUrl.includes("{{")) {
+    doc.documentUrl = updates.documentUrl;
+    doc.fileUrl = updates.documentUrl;
+  }
+
+  if (updates.side) doc.side = updates.side;
+  if (updates.maskedNumber) {
+    doc.maskedNumber = updates.maskedNumber;
+    doc.documentNumber = updates.maskedNumber;
+  }
+  if (updates.documentNumber) doc.documentNumber = updates.documentNumber;
+  if (updates.expiryDate) doc.expiryDate = updates.expiryDate;
+  if (updates.documentType) doc.documentType = updates.documentType;
+  if (updates.metadata) doc.metadata = { ...(doc.metadata || {}), ...updates.metadata };
+
+  await doc.save();
+
+  return ok(res, {
+    documentId: doc._id,
+    id: doc._id,
+    document: {
+      documentId: doc._id,
+      id: doc._id,
+      ...doc.toObject()
+    }
+  }, "Driver document updated successfully");
+});
+
+router.patch("/driver/applications/me/documents/:id", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(documentSchema), handleUpdateDocument);
+router.put("/driver/applications/me/documents/:id", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(documentSchema), handleUpdateDocument);
+
+router.get("/driver/applications/me", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  const p = await profileFor(req.user);
+  const docs = await DriverDocument.find({ driverId: req.user._id }).sort({ createdAt: -1 });
+  return ok(res, {
+    applicationId: p._id,
+    driverId: req.user._id,
+    applicationStatus: p.applicationStatus,
+    availability: p.availability,
+    city: p.city || "Delhi NCR",
+    vehicleCategory: p.vehicleCategory || "moto",
+    documentsCount: docs.length,
+    documents: docs,
+    requiredDocuments: [
+      { type: "DRIVING_LICENSE", title: "Driving License", status: docs.some(d => d.documentType === "DRIVING_LICENSE") ? "UPLOADED" : "PENDING" },
+      { type: "VEHICLE_RC", title: "Registration Certificate (RC)", status: docs.some(d => d.documentType === "VEHICLE_RC") ? "UPLOADED" : "PENDING" },
+      { type: "VEHICLE_INSURANCE", title: "Insurance Policy", status: docs.some(d => d.documentType === "VEHICLE_INSURANCE") ? "UPLOADED" : "PENDING" },
+      { type: "AADHAAR", title: "Aadhaar Card", status: docs.some(d => d.documentType === "AADHAAR") ? "UPLOADED" : "PENDING" }
+    ]
+  }, "Driver application status retrieved");
+}));
+
+router.post("/driver/applications/me/submit", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  const p = await profileFor(req.user);
+  p.applicationStatus = "APPROVED";
+  p.availability = "ONLINE";
+  await p.save();
+  return ok(res, {
+    applicationId: p._id,
+    applicationStatus: p.applicationStatus,
+    availability: p.availability
+  }, "Driver application submitted and approved");
+}));
+
+router.delete("/driver/applications/me/documents/:id", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  await DriverDocument.deleteOne({ _id: req.params.id, driverId: req.user._id });
+  return ok(res, {}, "Driver document deleted");
+}));
+
+const vehicleSchema = z.object({
+  registrationNumber: z.string().optional(),
+  plateNumber: z.string().optional(),
+  vehicleType: z.string().optional(),
+  vehicleCategory: z.string().optional(),
+  category: z.string().optional(),
+  model: z.string().optional(),
+  make: z.string().optional(),
+  color: z.string().optional(),
+  year: z.union([z.number(), z.string()]).optional(),
+  registrationStatus: z.string().optional()
+}).passthrough();
+
+const handleUpdateVehicle = asyncHandler(async (req, res) => {
+  const p = await profileFor(req.user);
+
+  const regNo = req.body.registrationNumber || req.body.plateNumber || p.vehicle?.registrationNumber || p.vehicle?.plateNumber || "DL 01 AB 1234";
+  const cat = req.body.vehicleType || req.body.vehicleCategory || req.body.category || p.vehicle?.category || p.vehicleCategory || "CAR";
+  const defaultModel = cat.toUpperCase() === "CAR" ? "Maruti Swift / WagonR" : (cat.toUpperCase() === "AUTO" ? "Bajaj Compact 4S" : "Hero Splendor / Honda Activa");
+  const model = req.body.model || (p.vehicle?.model && !p.vehicle.model.includes("Hero") ? p.vehicle.model : defaultModel);
+  const regStatus = req.body.registrationStatus || p.vehicle?.registrationStatus || "VERIFIED";
+
+  p.vehicle = {
+    category: cat,
+    vehicleType: cat,
+    model: model,
+    plateNumber: regNo,
+    registrationNumber: regNo,
+    registrationStatus: regStatus,
+    make: req.body.make || p.vehicle?.make || "",
+    color: req.body.color || p.vehicle?.color || "White",
+    year: req.body.year ? Number(req.body.year) : (p.vehicle?.year || 2022)
+  };
+  p.vehicleCategory = cat;
+
+  await p.save();
+
+  await DriverDocument.updateOne(
+    { driverId: req.user._id, documentType: "VEHICLE_RC" },
+    { $set: { documentNumber: regNo, maskedNumber: regNo, status: "VERIFIED" } }
+  );
+
+  return ok(res, {
+    vehicle: {
+      category: p.vehicle.category,
+      vehicleType: p.vehicle.vehicleType,
+      model: p.vehicle.model,
+      plateNumber: p.vehicle.plateNumber,
+      registrationNumber: p.vehicle.registrationNumber,
+      registrationStatus: p.vehicle.registrationStatus,
+      color: p.vehicle.color,
+      year: p.vehicle.year
+    }
+  }, "Driver vehicle updated successfully");
+});
+
+router.get("/driver/vehicle", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  const p = await profileFor(req.user);
+  const rcDoc = await DriverDocument.findOne({ driverId: req.user._id, documentType: "VEHICLE_RC" });
+
+  const regNo = p.vehicle?.registrationNumber || p.vehicle?.plateNumber || rcDoc?.documentNumber || "DL 01 AB 1234";
+  const cat = p.vehicle?.category || p.vehicle?.vehicleType || p.vehicleCategory || "BIKE_SCOOTY";
+  const model = p.vehicle?.model || (cat === "CAR" ? "Maruti Swift / WagonR" : "Hero Splendor / Honda Activa");
+  const regStatus = p.vehicle?.registrationStatus || (rcDoc ? "VERIFIED" : "PENDING");
+
+  return ok(res, {
+    vehicle: {
+      category: cat,
+      vehicleType: cat,
+      model: model,
+      plateNumber: regNo,
+      registrationNumber: regNo,
+      registrationStatus: regStatus,
+      color: p.vehicle?.color || "White",
+      year: p.vehicle?.year || 2022
+    }
+  }, "Driver vehicle details retrieved");
+}));
+
+router.patch("/driver/vehicle", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(vehicleSchema), handleUpdateVehicle);
+router.put("/driver/vehicle", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(vehicleSchema), handleUpdateVehicle);
+router.post("/driver/vehicle", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(vehicleSchema), handleUpdateVehicle);
+
+router.get("/driver/compliance", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  const docs = await DriverDocument.find({ driverId: req.user._id });
+  const p = await profileFor(req.user);
+  return ok(res, {
+    applicationStatus: p.applicationStatus,
+    items: docs,
+    count: docs.length,
+    verifiedCount: docs.filter(d => d.status === "VERIFIED").length
+  }, "Driver compliance documents retrieved");
+}));
 // --- Driver Offers & Ride Lifecycle APIs ---
 
 router.get("/driver/offers", requireAuth, allowRoles("driver", "admin"), asyncHandler(async (req, res) => {

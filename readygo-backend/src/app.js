@@ -6,6 +6,8 @@ import rateLimit from "express-rate-limit";
 import { requestContext } from "./middleware/requestContext.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 import authRoutes from "./modules/auth/auth.routes.js";
+import driverAuthRoutes from "./modules/driver/driverAuth.routes.js";
+import uploadRoutes from "./modules/uploads/uploads.routes.js";
 import userRoutes from "./modules/users/users.routes.js";
 import fareRoutes from "./modules/fares/fares.routes.js";
 import rideRoutes from "./modules/rides/rides.routes.js";
@@ -28,6 +30,9 @@ app.use("/api",rateLimit({windowMs:15*60*1000,limit:300,standardHeaders:true,leg
 app.get("/health",(req,res)=>res.json({success:true,data:{status:"ok",service:"readygo-backend",timestamp:new Date().toISOString()}}));
 const prefix=process.env.API_PREFIX||"/api/v1";
 app.use(`${prefix}/auth`,authRoutes);
+app.use(`${prefix}/driver/auth`,driverAuthRoutes);
+app.use(`${prefix}/uploads`,uploadRoutes);
+app.use(`${prefix}/upload`,uploadRoutes);
 app.use(`${prefix}`,userRoutes);
 app.use(`${prefix}`,fareRoutes);
 app.use(`${prefix}`,rideRoutes);

@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "readygo-full-collection-v2",
     "name": "Ride_Ready_Go",
-    "description": "# 🚕 ReadyGo - Complete API Collection (Rider + Driver Lifecycle)\n\nIs Postman collection me **Rider** aur **Driver** dono ke complete workflows diye gaye hain, jisme saare endpoints, proper Hindi & English comments, auto-saving test scripts aur demo payloads shamil hain.\n\n### 📌 Global Variables:\n- `baseUrl`: `http://localhost:5000/api/v1`\n- `riderToken`: Rider JWT Access Token\n- `driverToken`: Driver JWT Access Token\n- `rideId`: Current Active Ride ID\n- `offerId`: Driver Offer ID",
+    "_postman_id": "readygo-postman-tested-v2",
+    "description": "ReadyGo Ride Hailing Platform - Postman Collection\n\nIs collection me kewal wahi endpoints hain jo abhi tak Postman me test aur implement hue hain:\n- RiderPage(User)\n- DriverPage\n\nVariables:\n- baseUrl: http://localhost:5000/api/v1\n- riderToken: Auto-saved on Rider OTP verify\n- driverToken: Auto-saved on Driver OTP verify\n- rideId, offerId, tripId, ratingId, incentiveId",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -11,30 +11,31 @@
     { "key": "driverToken", "value": "", "type": "string" },
     { "key": "rideId", "value": "", "type": "string" },
     { "key": "offerId", "value": "", "type": "string" },
+    { "key": "tripId", "value": "", "type": "string" },
     { "key": "ratingId", "value": "rating_123", "type": "string" },
     { "key": "incentiveId", "value": "inc_daily_10", "type": "string" }
   ],
   "item": [
     {
       "name": "RiderPage(User)",
-      "description": "## 🟢 Rider (Customer) Application Flow\nUser signup/login se lekar Ride book karna, tracking aur rating tak ka complete workflow.",
+      "description": "### 📱 RIDERPAGE (USER) COMPLETE MODULE\nCustomer/Rider side ka complete workflow: Authentication, Profile, Nearby Drivers, Promos, Ride Booking, aur Ratings.",
       "item": [
         {
           "name": "auth",
-          "description": "### [MODULE 1: RIDER AUTHENTICATION]",
+          "description": "Rider Authentication & Session Management",
           "item": [
             {
               "name": "otp/send",
               "request": {
-                "auth": { "type": "noauth" },
                 "method": "POST",
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"countryCode\": \"+91\",\n  \"phone\": \"9877665543\",\n  \"purpose\": \"login\"\n}"
+                  "raw": "{\n  \"countryCode\": \"+91\",\n  \"phone\": \"9876543210\",\n  \"purpose\": \"login\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/auth/otp/send", "host": ["{{baseUrl}}"], "path": ["auth", "otp", "send"] },
-                "description": "▶️ **[STEP 1.1: SEND OTP]**\n- User ke phone par 6-digit OTP bhejta hai.\n- Backend console me `[DEV OTP]` print hota hai."
+                "description": "▶️ **[STEP 1.1: WORK START - SEND OTP]**\n- **Purpose:** Rider login/signup ke liye mobile par 6-digit OTP bhejta hai.\n- **Dev Mode:** Backend terminal me `[DEV OTP] +919876543210: XXXXXX` print hota hai."
               }
             },
             {
@@ -44,9 +45,74 @@
                   "listen": "test",
                   "script": {
                     "exec": [
-                      "var res = pm.response.json();",
-                      "if (res.data && res.data.accessToken) {",
-                      "    pm.collectionVariables.set('riderToken', res.data.accessToken);",
+                      "if (pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  if (res.data && res.data.accessToken) {",
+                      "    pm.collectionVariables.set(\"riderToken\", res.data.accessToken);",
+                      "    console.log(\"Rider Token saved:\", res.data.accessToken);",
+                      "  }",
+                      "}",
+                      "pm.test(\"Status 200 - Rider Logged In\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"countryCode\": \"+91\",\n  \"phone\": \"9876543210\",\n  \"otp\": \"123456\",\n  \"deviceId\": \"device-rider-001\",\n  \"role\": \"rider\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/auth/otp/verify", "host": ["{{baseUrl}}"], "path": ["auth", "otp", "verify"] },
+                "description": "▶️ **[STEP 1.2: VERIFY OTP & SAVE RIDER TOKEN]**\n- **Purpose:** OTP verify karke rider JWT token return karta hai.\n- **Auto-Save:** Response se `accessToken` automatically `{{riderToken}}` variable me save ho jata hai."
+              }
+            },
+            {
+              "name": "Refresh Token",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/auth/token/refresh", "host": ["{{baseUrl}}"], "path": ["auth", "token", "refresh"] },
+                "description": "▶️ **[STEP 1.3: SILENT TOKEN REFRESH]**\n- **Purpose:** Access token expire hone par silent background call se naya token leta hai bina re-login kiye."
+              }
+            },
+            {
+              "name": "Register",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"deviceId\": \"device-rider-001\",\n  \"platform\": \"android\",\n  \"pushToken\": \"fcm_token_rider_xyz789\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/auth/devices/register", "host": ["{{baseUrl}}"], "path": ["auth", "devices", "register"] },
+                "description": "▶️ **[STEP 1.4: REGISTER DEVICE PUSH TOKEN]**\n- **Purpose:** Rider mobile app ke push notifications (FCM / APNs) ke liye device register karta hai."
+              }
+            },
+            {
+              "name": "switch-role",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  if (res.data && res.data.accessToken) {",
+                      "    pm.collectionVariables.set(\"riderToken\", res.data.accessToken);",
+                      "  }",
                       "}"
                     ],
                     "type": "text/javascript"
@@ -54,144 +120,117 @@
                 }
               ],
               "request": {
-                "auth": { "type": "noauth" },
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"countryCode\": \"+91\",\n  \"phone\": \"9877665543\",\n  \"otp\": \"123456\",\n  \"deviceId\": \"device_android_001\",\n  \"role\": \"rider\"\n}"
-                },
-                "url": { "raw": "{{baseUrl}}/auth/otp/verify", "host": ["{{baseUrl}}"], "path": ["auth", "otp", "verify"] },
-                "description": "▶️ **[STEP 1.2: VERIFY OTP & GET RIDER TOKEN]**\n- Returns `accessToken` with `role: rider`.\n- Auto-saves into `{{riderToken}}`."
-              }
-            },
-            {
-              "name": "Refresh Token",
-              "request": {
-                "auth": { "type": "noauth" },
-                "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-                },
-                "url": { "raw": "{{baseUrl}}/auth/token/refresh", "host": ["{{baseUrl}}"], "path": ["auth", "token", "refresh"] },
-                "description": "▶️ **[STEP 1.3: SILENT TOKEN REFRESH]**\n- Access token expire hone par naya token generate karta hai."
-              }
-            },
-            {
-              "name": "Register",
-              "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
-                "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"deviceId\": \"samsung_galaxy_s23_001\",\n  \"platform\": \"android\",\n  \"pushToken\": \"fcm_device_token_sample_abc123\"\n}"
-                },
-                "url": { "raw": "{{baseUrl}}/auth/devices/register", "host": ["{{baseUrl}}"], "path": ["auth", "devices", "register"] },
-                "description": "▶️ **[STEP 1.4: SAVE FCM PUSH TOKEN]**\n- Push notifications receive karne ke liye FCM token register karta hai."
-              }
-            },
-            {
-              "name": "switch-role",
-              "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
-                "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"role\": \"driver\"\n}"
+                  "raw": "{\n  \"role\": \"rider\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/auth/switch-role", "host": ["{{baseUrl}}"], "path": ["auth", "switch-role"] },
-                "description": "▶️ **[STEP 1.5: SWITCH ROLE (RIDER <-> DRIVER)]**\n- Bina OTP dobara verify kiye role change karta hai aur naya access token deta hai."
+                "description": "▶️ **[STEP 1.5: DYNAMIC SWITCH ROLE TO RIDER]**\n- **Purpose:** Bina dubara OTP mangwaye, active session me role 'rider' switch karta hai aur new token return karta hai."
               }
             },
             {
               "name": "Logout",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                  "raw": "{\n  \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] },
-                "description": "▶️ **[STEP 1.6: LOGOUT]**\n- User refresh session revoke karta hai."
+                "description": "⏹️ **[STEP 1.6: LOGOUT - AUTH WORK END]**\n- **Purpose:** User session invalidate karke database se logout karta hai."
               }
             }
           ]
         },
         {
           "name": "Rider Profile",
-          "description": "### [MODULE 2: RIDER PROFILE MANAGEMENT]",
+          "description": "Rider Profile Information, Preferences & Referrals",
           "item": [
             {
               "name": "getprofile",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
                 "url": { "raw": "{{baseUrl}}/rider/profile", "host": ["{{baseUrl}}"], "path": ["rider", "profile"] },
-                "description": "▶️ **[STEP 2.1: GET RIDER PROFILE]**\n- Name, phone, email, avatarUrl aur referral code deta hai."
+                "description": "▶️ **[STEP 2.1: WORK START - GET RIDER PROFILE]**\n- **Purpose:** Logged-in rider ka name, phone, email, avatarUrl, referralCode aur profileCompleted status deta hai."
               }
             },
             {
               "name": "updateprofile",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "PATCH",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"fullName\": \"Rahul Sharma\",\n  \"email\": \"rahul@example.com\",\n  \"avatarUrl\": \"https://picsum.photos/seed/2/150\",\n  \"referralCode\": \"RAHUL2026\"\n}"
+                  "raw": "{\n  \"fullName\": \"Rahul Sharma\",\n  \"email\": \"rahul@example.com\",\n  \"avatarUrl\": \"https://picsum.photos/seed/2/150\",\n  \"referralCode\": \"RAHUL2026\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/rider/profile", "host": ["{{baseUrl}}"], "path": ["rider", "profile"] },
-                "description": "▶️ **[STEP 2.2: UPDATE PROFILE]**\n- Name, email, avatar update karne ke liye."
+                "description": "▶️ **[STEP 2.2: UPDATE RIDER PROFILE]**\n- **Purpose:** Full name, email, avatar image URL update karta hai."
               }
             },
             {
               "name": "updatepreference",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "PATCH",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"whatsAppUpdatesEnabled\": true,\n  \"ridePushEnabled\": true\n}"
+                  "raw": "{\n  \"whatsAppUpdatesEnabled\": true,\n  \"ridePushEnabled\": true\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/rider/preferences", "host": ["{{baseUrl}}"], "path": ["rider", "preferences"] },
-                "description": "▶️ **[STEP 2.3: NOTIFICATION SETTINGS]**\n- WhatsApp updates aur Push notification toggle."
+                "description": "▶️ **[STEP 2.3: UPDATE NOTIFICATION PREFERENCES]**\n- **Purpose:** WhatsApp ride updates aur push notifications toggle karta hai."
               }
             },
             {
               "name": "avatar",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"fileName\": \"my_photo.jpg\",\n  \"contentType\": \"image/jpeg\"\n}"
+                  "raw": "{\n  \"fileName\": \"https://picsum.photos/seed/2/150\",\n  \"contentType\": \"image/jpeg\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/rider/avatar/upload-url", "host": ["{{baseUrl}}"], "path": ["rider", "avatar", "upload-url"] },
-                "description": "▶️ **[STEP 2.4: GENERATE AVATAR UPLOAD URL]**\n- S3/Storage presigned upload URL generate karta hai."
+                "description": "▶️ **[STEP 2.4: GENERATE AVATAR UPLOAD URL]**\n- **Purpose:** Presigned uploadUrl aur final avatarUrl generate karta hai."
               }
             },
             {
               "name": "referalcode",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
                 "url": { "raw": "{{baseUrl}}/rider/referrals/READY2026/validate", "host": ["{{baseUrl}}"], "path": ["rider", "referrals", "READY2026", "validate"] },
-                "description": "▶️ **[STEP 2.5: VALIDATE REFERRAL CODE]**\n- Friend ka invite code check karta hai discount ke liye."
+                "description": "⏹️ **[STEP 2.5: VALIDATE REFERRAL CODE - PROFILE WORK END]**\n- **Purpose:** Signup discount ke liye referral code validate karta hai."
               }
             }
           ]
         },
         {
           "name": "prvc (Nearby Drivers & Vehicles)",
-          "description": "### [MODULE 3: MAP VIEW & VEHICLE PRICING]",
+          "description": "Nearby Online Drivers Map Discovery & Vehicle Category Pricing",
           "item": [
             {
               "name": "nearbydriver",
@@ -207,7 +246,7 @@
                     { "key": "radiusKm", "value": "5" }
                   ]
                 },
-                "description": "▶️ **[STEP 3.1: LIVE NEARBY DRIVERS MAP]**\n- Rider coordinates ke paas ke available drivers fetch karta hai."
+                "description": "▶️ **[STEP 3.1: WORK START - DISCOVER NEARBY DRIVERS ON MAP]**\n- **Purpose:** Rider map screen par nearby live online drivers (moto, auto, mini) display karta hai unke bearing aur ETA ke saath."
               }
             },
             {
@@ -215,21 +254,21 @@
               "request": {
                 "method": "GET",
                 "url": { "raw": "{{baseUrl}}/vehicle-categories/moto", "host": ["{{baseUrl}}"], "path": ["vehicle-categories", "moto"] },
-                "description": "▶️ **[STEP 3.2: VEHICLE CATEGORY PRICING]**\n- Base price, per KM rate (`moto`, `auto`, `mini`, `prime`)."
+                "description": "⏹️ **[STEP 3.2: VEHICLE CATEGORY PRICING - PRVC WORK END]**\n- **Purpose:** Selected vehicle type (moto, auto, mini, prime) ka base fare aur per km rate fetch karta hai."
               }
             }
           ]
         },
         {
           "name": "promotion & discount",
-          "description": "### [MODULE 4: PROMOTIONS & COUPONS]",
+          "description": "Promo Codes, Coupons & Discounts",
           "item": [
             {
               "name": "eligiblepromos",
               "request": {
                 "method": "GET",
                 "url": { "raw": "{{baseUrl}}/promos/eligible", "host": ["{{baseUrl}}"], "path": ["promos", "eligible"] },
-                "description": "▶️ **[STEP 4.1: ELIGIBLE PROMOS]**\n- Available discount coupons list karta hai."
+                "description": "▶️ **[STEP 4.1: WORK START - LIST ELIGIBLE PROMOS]**\n- **Purpose:** Available discount promo coupons list (READY50, SAVE20) fetch karta hai."
               }
             },
             {
@@ -239,40 +278,44 @@
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"code\": \"READY50\",\n  \"categoryId\": \"moto\"\n}"
+                  "raw": "{\n  \"code\": \"READY50\",\n  \"quoteId\": \"quote_123\",\n  \"categoryId\": \"moto\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/promos/validate", "host": ["{{baseUrl}}"], "path": ["promos", "validate"] },
-                "description": "▶️ **[STEP 4.2: VALIDATE PROMO CODE]**\n- Coupon discount calculate karta hai."
+                "description": "▶️ **[STEP 4.2: VALIDATE PROMO CODE]**\n- **Purpose:** Promo coupon code validate karke discount amount calculate karta hai."
               }
             },
             {
               "name": "promoride",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"code\": \"READY50\"\n}"
+                  "raw": "{\n  \"code\": \"READY50\",\n  \"quoteId\": \"quote_123\",\n  \"categoryId\": \"moto\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/rides/{{rideId}}/promo", "host": ["{{baseUrl}}"], "path": ["rides", "{{rideId}}", "promo"] },
-                "description": "▶️ **[STEP 4.3: APPLY PROMO CODE TO RIDE]**\n- Active ride par discount apply karta hai."
+                "description": "▶️ **[STEP 4.3: APPLY PROMO CODE TO RIDE]**\n- **Purpose:** Active ride me coupon code lagata hai aur total fare discount update karta hai."
               }
             },
             {
               "name": "removepromo",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
                 "url": { "raw": "{{baseUrl}}/rides/{{rideId}}/promo", "host": ["{{baseUrl}}"], "path": ["rides", "{{rideId}}", "promo"] },
-                "description": "▶️ **[STEP 4.4: REMOVE PROMO CODE]**\n- Applied coupon hata kar standard fare restore karta hai."
+                "description": "⏹️ **[STEP 4.4: REMOVE PROMO FROM RIDE - PROMOTION WORK END]**\n- **Purpose:** Applied promo code ko ride se remove karta hai aur original fare restore karta hai."
               }
             }
           ]
         },
         {
           "name": "ridebooking & lifecycle",
-          "description": "### [MODULE 5: RIDER BOOKING & LIFECYCLE]",
+          "description": "Rider Ride Booking & Full Trip Lifecycle",
           "item": [
             {
               "name": "ride",
@@ -281,10 +324,12 @@
                   "listen": "test",
                   "script": {
                     "exec": [
-                      "var res = pm.response.json();",
-                      "if (res.data && res.data._id) {",
-                      "    pm.collectionVariables.set('rideId', res.data._id);",
-                      "    pm.collectionVariables.set('offerId', res.data._id);",
+                      "if (pm.response.code === 201 || pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  if (res.data && res.data._id) {",
+                      "    pm.collectionVariables.set(\"rideId\", res.data._id);",
+                      "    console.log(\"Saved rideId:\", res.data._id);",
+                      "  }",
                       "}"
                     ],
                     "type": "text/javascript"
@@ -292,94 +337,124 @@
                 }
               ],
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"categoryId\": \"moto\",\n  \"paymentMethodId\": \"wallet_123\",\n  \"pickup\": {\n    \"latitude\": 28.6139,\n    \"longitude\": 77.2090,\n    \"address\": \"Connaught Place, New Delhi\"\n  },\n  \"dropoff\": {\n    \"latitude\": 28.5355,\n    \"longitude\": 77.3910,\n    \"address\": \"Sector 18, Noida\"\n  }\n}"
+                  "raw": "{\n  \"quoteId\": \"quote_123\",\n  \"categoryId\": \"moto\",\n  \"paymentMethodId\": \"cash\",\n  \"pickup\": {\n    \"latitude\": 28.6139,\n    \"longitude\": 77.2090,\n    \"address\": \"Connaught Place, New Delhi\"\n  },\n  \"dropoff\": {\n    \"latitude\": 28.5355,\n    \"longitude\": 77.3910,\n    \"address\": \"Sector 18, Noida\"\n  }\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/rides", "host": ["{{baseUrl}}"], "path": ["rides"] },
-                "description": "▶️ **[STEP 5.1: BOOK RIDE]**\n- Status set hota hai: `SEARCHING_DRIVER`.\n- Auto-saves response `_id` into `{{rideId}}`."
+                "description": "▶️ **[STEP 5.1: WORK START - REQUEST / BOOK A RIDE]**\n- **Purpose:** Ride request create karta hai status 'SEARCHING_DRIVER'.\n- **Auto-Save:** Response se `_id` ko automatically `{{rideId}}` me save kar deta hai."
               }
             },
             {
               "name": "cancleride",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"reason\": \"Change of plans\"\n}"
+                  "raw": "{\n  \"reason\": \"Driver taking too long\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/rides/{{rideId}}/cancel", "host": ["{{baseUrl}}"], "path": ["rides", "{{rideId}}", "cancel"] },
-                "description": "▶️ **[STEP 5.2: CANCEL RIDE]**\n- Status set hota hai: `CANCELLED_BY_RIDER`."
+                "description": "▶️ **[STEP 5.2: CANCEL RIDE]**\n- **Purpose:** Rider side se ride cancel karta hai with reason."
               }
             },
             {
               "name": "riderrequest",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
                 "url": { "raw": "{{baseUrl}}/rides/{{rideId}}", "host": ["{{baseUrl}}"], "path": ["rides", "{{rideId}}"] },
-                "description": "▶️ **[STEP 5.3: RIDE DETAILS]**\n- Current ride ka live status aur fare fetch karta hai."
+                "description": "▶️ **[STEP 5.3: GET RIDE STATUS]**\n- **Purpose:** Ride ka current status (SEARCHING_DRIVER, DRIVER_ASSIGNED, DRIVER_ARRIVED, IN_PROGRESS, COMPLETED) return karta hai."
               }
             },
             {
               "name": "ridelocation",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
                 "url": { "raw": "{{baseUrl}}/rides/{{rideId}}/tracking", "host": ["{{baseUrl}}"], "path": ["rides", "{{rideId}}", "tracking"] },
-                "description": "▶️ **[STEP 5.4: LIVE RIDE TRACKING]**\n- Assigned driver ki live GPS location return karta hai."
+                "description": "▶️ **[STEP 5.4: TRACK DRIVER LOCATION & ETA]**\n- **Purpose:** Assigned driver ki live coordinates (latitude, longitude) aur navigation ETA track karta hai."
               }
             },
             {
               "name": "ridehistory",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "GET",
-                "url": { "raw": "{{baseUrl}}/rider/rides?page=1&limit=10", "host": ["{{baseUrl}}"], "path": ["rider", "rides"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] },
-                "description": "▶️ **[STEP 5.5: RIDER TRIP HISTORY]**\n- Past rides list pagination ke sath."
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+                "url": {
+                  "raw": "{{baseUrl}}/rider/rides?page=1&limit=10",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["rider", "rides"],
+                  "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }]
+                },
+                "description": "▶️ **[STEP 5.5: RIDER PAST RIDES HISTORY]**\n- **Purpose:** Rider ke sabhi previous aur ongoing trips ki paginated list deta hai."
               }
             },
             {
               "name": "ridereceipt",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
                 "url": { "raw": "{{baseUrl}}/rides/{{rideId}}/receipt", "host": ["{{baseUrl}}"], "path": ["rides", "{{rideId}}", "receipt"] },
-                "description": "▶️ **[STEP 5.6: RIDE RECEIPT]**\n- Final itemized fare bill."
+                "description": "⏹️ **[STEP 5.6: GET RIDE FARE RECEIPT - BOOKING WORK END]**\n- **Purpose:** Ride complete hone ke baad detailed invoice / fare breakdown receipt fetch karta hai."
               }
             }
           ]
         },
         {
           "name": "Rating & Review",
-          "description": "### [MODULE 6: RIDER RATE DRIVER]",
+          "description": "Rider Feedback & Driver Rating",
           "item": [
             {
-              "name": "viewriderating",
+              "name": "submitreview",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201 || pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  if (res.data && res.data._id) {",
+                      "    pm.collectionVariables.set(\"ratingId\", res.data._id);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
-                "method": "GET",
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"stars\": 5,\n  \"comment\": \"Smooth ride, polite and safe driving!\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
                 "url": { "raw": "{{baseUrl}}/rides/{{rideId}}/rating", "host": ["{{baseUrl}}"], "path": ["rides", "{{rideId}}", "rating"] },
-                "description": "▶️ **[STEP 6.1: VIEW RIDE RATING]**\n- Ride ki existing rating check karne ke liye."
+                "description": "▶️ **[STEP 6.1: SUBMIT RIDE RATING & REVIEW]**\n- **Purpose:** Completed ride ke baad driver ko 1-5 star rating aur review comment deta hai. Driver ki overall average rating auto-update hoti hai."
               }
             },
             {
-              "name": "submitreview",
+              "name": "viewriderating",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{riderToken}}", "type": "string" }] },
-                "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"stars\": 5,\n  \"comment\": \"Driver was very polite and driving was smooth!\"\n}"
-                },
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
                 "url": { "raw": "{{baseUrl}}/rides/{{rideId}}/rating", "host": ["{{baseUrl}}"], "path": ["rides", "{{rideId}}", "rating"] },
-                "description": "▶️ **[STEP 6.2: SUBMIT DRIVER REVIEW]**\n- Completed ride par 1-5 stars aur feedback submit karta hai."
+                "description": "⏹️ **[STEP 6.2: VIEW SUBMITTED RATING - RIDER WORK END]**\n- **Purpose:** Ride ke liye submit kiye gaye rating aur comment ko verify karta hai."
               }
             }
           ]
@@ -388,12 +463,26 @@
     },
     {
       "name": "DriverPage",
-      "description": "## 🟡 Driver Application Flow\nDriver onboarding, live offer accept, pickup arrival, trip completion, earnings dashboard aur review management.",
+      "description": "### 🚗 DRIVERPAGE COMPLETE MODULE\nDriver Partner side ka complete workflow: Authentication, Availability, Offers Acceptance, Arrival, Ride Start & Complete, Dashboard, Earnings, Incentives, Ratings & Performance.",
       "item": [
         {
           "name": "auth",
-          "description": "### [MODULE 1: DRIVER AUTHENTICATION & STATUS]",
+          "description": "Driver Authentication, Availability & Location",
           "item": [
+            {
+              "name": "otp send",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"countryCode\": \"+91\",\n  \"phone\": \"9876543212\",\n  \"purpose\": \"login\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/driver/auth/otp/send", "host": ["{{baseUrl}}"], "path": ["driver", "auth", "otp", "send"] },
+                "description": "▶️ **[STEP 1.0: DRIVER SEND OTP]**\n- **Purpose:** Driver login ke liye OTP generate karta hai.\n- **Dev Mode:** Terminal me `[DEV OTP] [DRIVER] +919876543212: XXXXXX` print hota hai."
+              }
+            },
             {
               "name": "Verify OTP (Driver)",
               "event": [
@@ -401,9 +490,105 @@
                   "listen": "test",
                   "script": {
                     "exec": [
-                      "var res = pm.response.json();",
-                      "if (res.data && res.data.accessToken) {",
-                      "    pm.collectionVariables.set('driverToken', res.data.accessToken);",
+                      "if (pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  if (res.data && res.data.accessToken) {",
+                      "    pm.collectionVariables.set(\"driverToken\", res.data.accessToken);",
+                      "    console.log(\"Driver Token saved successfully:\", res.data.accessToken);",
+                      "  }",
+                      "}",
+                      "pm.test(\"Status 200 - Driver Logged In\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"countryCode\": \"+91\",\n  \"phone\": \"9876543212\",\n  \"otp\": \"123456\",\n  \"deviceId\": \"device-driver-001\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/driver/auth/otp/verify", "host": ["{{baseUrl}}"], "path": ["driver", "auth", "otp", "verify"] },
+                "description": "▶️ **[STEP 1.1: DRIVER LOGIN & AUTO-APPROVE PROFILE]**\n- **Purpose:** Driver login karta hai. Backend automatically `DriverProfile` ko APPROVED aur ONLINE initialize karta hai.\n- **Auto-Save:** Token automatically `{{driverToken}}` variable me save ho jata hai."
+              }
+            },
+            {
+              "name": "Driver Auth Me",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+                "url": { "raw": "{{baseUrl}}/driver/auth/me", "host": ["{{baseUrl}}"], "path": ["driver", "auth", "me"] },
+                "description": "▶️ **[STEP 1.1b: GET CURRENT LOGGED-IN DRIVER DETAILS]**\n- **Purpose:** Current authenticated driver user aur driverProfile details fetch karta hai."
+              }
+            },
+            {
+              "name": "Driver Profile",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+                "url": { "raw": "{{baseUrl}}/driver/profile", "host": ["{{baseUrl}}"], "path": ["driver", "profile"] },
+                "description": "▶️ **[STEP 1.2: GET DRIVER PROFILE]**\n- **Purpose:** Driver applicationStatus, availability, averageRating aur totalRatings fetch karta hai."
+              }
+            },
+            {
+              "name": "Driver Availability Online/Offline",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"ONLINE\",\n  \"vehicleCategory\": \"moto\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/driver/availability", "host": ["{{baseUrl}}"], "path": ["driver", "availability"] },
+                "description": "▶️ **[STEP 1.3: GO ONLINE / OFFLINE]**\n- **Purpose:** Driver duty status toggle karta hai. ONLINE hone par nayi ride requests aana start hoti hain."
+              }
+            },
+            {
+              "name": "Driver Location Ping",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"latitude\": 28.6139,\n  \"longitude\": 77.2090,\n  \"heading\": 90,\n  \"speedMps\": 10.5\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/driver/location", "host": ["{{baseUrl}}"], "path": ["driver", "location"] },
+                "description": "⏹️ **[STEP 1.4: BROADCAST GPS LOCATION - DRIVER AUTH WORK END]**\n- **Purpose:** Driver mobile app se live GPS coordinates backend ko bhejta hai matching engine ke liye."
+              }
+            }
+          ]
+        },
+        {
+          "name": "driver document upload",
+          "description": "Driver Document Upload & Onboarding Verification",
+          "item": [
+            {
+              "name": "uploadspresign",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  if (res.data && res.data.fileKey) {",
+                      "    pm.collectionVariables.set(\"fileKey\", res.data.fileKey);",
+                      "    console.log(\"Saved fileKey:\", res.data.fileKey);",
+                      "  }",
+                      "  if (res.data && res.data.uploadId) {",
+                      "    pm.collectionVariables.set(\"uploadId\", res.data.uploadId);",
+                      "  }",
                       "}"
                     ],
                     "type": "text/javascript"
@@ -411,350 +596,446 @@
                 }
               ],
               "request": {
-                "auth": { "type": "noauth" },
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"countryCode\": \"+91\",\n  \"phone\": \"7007498699\",\n  \"otp\": \"123456\",\n  \"deviceId\": \"driver_device_001\",\n  \"role\": \"driver\"\n}"
+                  "raw": "{\n  \"fileName\": \"license-front.jpg\",\n  \"contentType\": \"image/jpeg\",\n  \"sizeBytes\": 1200000,\n  \"purpose\": \"DRIVER_DOCUMENT\",\n  \"documentType\": \"DRIVING_LICENSE\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
-                "url": { "raw": "{{baseUrl}}/auth/otp/verify", "host": ["{{baseUrl}}"], "path": ["auth", "otp", "verify"] },
-                "description": "▶️ **[STEP D1.1: DRIVER LOGIN]**\n- Role `driver` ke sath login karta hai aur `{{driverToken}}` save karta hai."
+                "url": { "raw": "{{baseUrl}}/uploads/presign", "host": ["{{baseUrl}}"], "path": ["uploads", "presign"] },
+                "description": "▶️ **[STEP 1.5: PRESIGN UPLOAD URL]**\n- **Purpose:** Driver license ya RC document upload ke liye presigned URL generate karta hai.\n- **Auto-Save:** Response se `fileKey` automatically save ho jati hai."
               }
             },
             {
-              "name": "Driver Profile",
+              "name": "registerdocument",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201 || pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  var docId = res.data?.documentId || res.data?.document?._id || res.data?.id;",
+                      "  if (docId) {",
+                      "    pm.collectionVariables.set(\"documentId\", docId);",
+                      "    console.log(\"Saved documentId:\", docId);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"documentType\": \"DRIVING_LICENSE\",\n  \"fileKey\": \"{{fileKey}}\",\n  \"side\": \"FRONT\",\n  \"maskedNumber\": \"XXXX-XXXX-1234\",\n  \"expiryDate\": \"2028-12-31\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/driver/applications/me/documents", "host": ["{{baseUrl}}"], "path": ["driver", "applications", "me", "documents"] },
+                "description": "▶️ **[STEP 1.6: REGISTER DRIVER DOCUMENT]**\n- **Purpose:** Uploaded document ko driver application me register aur verify karta hai.\n- **Auto-Save:** `documentId` automatically save ho jati hai."
+              }
+            },
+            {
+              "name": "listdocument",
+              "request": {
                 "method": "GET",
-                "url": { "raw": "{{baseUrl}}/driver/profile", "host": ["{{baseUrl}}"], "path": ["driver", "profile"] },
-                "description": "▶️ **[STEP D1.2: DRIVER PROFILE & KYC]**\n- Driver rating, verification status, vehicle info."
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+                "url": { "raw": "{{baseUrl}}/driver/applications/me/documents", "host": ["{{baseUrl}}"], "path": ["driver", "applications", "me", "documents"] },
+                "description": "▶️ **[STEP 1.7: GET DRIVER DOCUMENTS LIST]**\n- **Purpose:** Uploaded documents ki list fetch karta hai."
               }
             },
             {
-              "name": "Driver Availability Online/Offline",
+              "name": "updatedocument",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "PATCH",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"status\": \"ONLINE\",\n  \"vehicleCategory\": \"moto\"\n}"
+                  "raw": "{\n  \"fileKey\": \"{{fileKey}}\",\n  \"side\": \"FRONT\",\n  \"maskedNumber\": \"XXXX-XXXX-5678\",\n  \"expiryDate\": \"2029-12-31\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
-                "url": { "raw": "{{baseUrl}}/driver/availability", "host": ["{{baseUrl}}"], "path": ["driver", "availability"] },
-                "description": "▶️ **[STEP D1.3: GO ONLINE/OFFLINE]**\n- Driver duty toggle."
+                "url": { "raw": "{{baseUrl}}/driver/applications/me/documents/{{documentId}}", "host": ["{{baseUrl}}"], "path": ["driver", "applications", "me", "documents", "{{documentId}}"] },
+                "description": "▶️ **[STEP 1.8: UPDATE DRIVER DOCUMENT]**\n- **Purpose:** Existing registered document ki details (expiry, masked number, fileKey) update karta hai."
               }
             },
             {
-              "name": "Driver Location Ping",
+              "name": "deletedocument",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
-                "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+                "url": { "raw": "{{baseUrl}}/driver/applications/me/documents/{{documentId}}", "host": ["{{baseUrl}}"], "path": ["driver", "applications", "me", "documents", "{{documentId}}"] },
+                "description": "▶️ **[STEP 1.8b: DELETE DRIVER DOCUMENT]**\n- **Purpose:** Registered document ko delete karta hai."
+              }
+            },
+            {
+              "name": "drivervehicle",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+                "url": { "raw": "{{baseUrl}}/driver/vehicle", "host": ["{{baseUrl}}"], "path": ["driver", "vehicle"] },
+                "description": "▶️ **[STEP 1.9: GET DRIVER VEHICLE]**\n- **Purpose:** Driver vehicle details, category aur registration status return karta hai."
+              }
+            },
+            {
+              "name": "updatedrivervehicle",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"latitude\": 28.6139,\n  \"longitude\": 77.2090,\n  \"heading\": 90,\n  \"speedMps\": 12.5\n}"
+                  "raw": "{\n  \"registrationNumber\": \"UP32AB1234\",\n  \"vehicleType\": \"CAR\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
-                "url": { "raw": "{{baseUrl}}/driver/location", "host": ["{{baseUrl}}"], "path": ["driver", "location"] },
-                "description": "▶️ **[STEP D1.4: LIVE GPS BROADCAST]**\n- Driver moving location update."
+                "url": { "raw": "{{baseUrl}}/driver/vehicle", "host": ["{{baseUrl}}"], "path": ["driver", "vehicle"] },
+                "description": "▶️ **[STEP 1.10: UPDATE DRIVER VEHICLE]**\n- **Purpose:** Driver vehicle category aur registration number update karta hai."
+              }
+            },
+            {
+              "name": "Get Driver Application Status",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+                "url": { "raw": "{{baseUrl}}/driver/applications/me", "host": ["{{baseUrl}}"], "path": ["driver", "applications", "me"] },
+                "description": "▶️ **[STEP 1.11: GET APPLICATION STATUS]**\n- **Purpose:** Driver application verification status fetch karta hai."
               }
             }
           ]
         },
         {
           "name": "driverbooking & lifecycle",
-          "description": "### [MODULE 2: DRIVER RIDE LIFECYCLE]",
+          "description": "Driver Ride Offers, Acceptance, Arrival, Start & Completion",
           "item": [
             {
               "name": "driveroffer",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  if (res.data && res.data.items && res.data.items.length > 0) {",
+                      "    pm.collectionVariables.set(\"offerId\", res.data.items[0].offerId);",
+                      "    console.log(\"Saved offerId:\", res.data.items[0].offerId);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/offers", "host": ["{{baseUrl}}"], "path": ["driver", "offers"] },
-                "description": "▶️ **[STEP D2.1: VIEW AVAILABLE OFFERS]**\n- Active nearby searching rides list karta hai."
+                "description": "▶️ **[STEP 2.1: WORK START - VIEW INCOMING RIDE OFFERS]**\n- **Purpose:** Nearby searching rides ki list show karta hai with pickup/drop locations aur fare.\n- **Auto-Save:** Pehle offer ka ID `{{offerId}}` me save ho jata hai."
               }
             },
             {
               "name": "acceptoffer",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/offers/{{offerId}}/accept", "host": ["{{baseUrl}}"], "path": ["driver", "offers", "{{offerId}}", "accept"] },
-                "description": "▶️ **[STEP D2.2: ACCEPT OFFER]**\n- Status set hota hai: `DRIVER_ASSIGNED`."
+                "description": "▶️ **[STEP 2.2: ACCEPT RIDE OFFER]**\n- **Purpose:** Driver ride offer accept karta hai. Ride status DRIVER_ASSIGNED ho jata hai."
               }
             },
             {
               "name": "rejectoffer",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"reason\": \"Too far from pickup\"\n}"
+                  "raw": "{\n  \"reason\": \"Pickup distance too far\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/driver/offers/{{offerId}}/reject", "host": ["{{baseUrl}}"], "path": ["driver", "offers", "{{offerId}}", "reject"] },
-                "description": "▶️ **[STEP D2.3: REJECT OFFER]**\n- Offer dismiss."
+                "description": "▶️ **[STEP 2.3: REJECT RIDE OFFER]**\n- **Purpose:** Driver ride offer reject karta hai with optional reason."
               }
             },
             {
               "name": "driverarrived",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/rides/{{rideId}}/arrived", "host": ["{{baseUrl}}"], "path": ["driver", "rides", "{{rideId}}", "arrived"] },
-                "description": "▶️ **[STEP D2.4: DRIVER ARRIVED AT PICKUP]**\n- Status set hota hai: `DRIVER_ARRIVED`."
+                "description": "▶️ **[STEP 2.4: MARK DRIVER ARRIVED AT PICKUP]**\n- **Purpose:** Driver pickup location par pahunch chuka hai. Status ban jata hai DRIVER_ARRIVED."
               }
             },
             {
               "name": "startride",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"otp\": \"1234\"\n}"
-                },
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/rides/{{rideId}}/start", "host": ["{{baseUrl}}"], "path": ["driver", "rides", "{{rideId}}", "start"] },
-                "description": "▶️ **[STEP D2.5: START RIDE]**\n- Status set hota hai: `IN_PROGRESS`."
+                "description": "▶️ **[STEP 2.5: START RIDE / IN_PROGRESS]**\n- **Purpose:** Rider ke baithne ke baad trip start karta hai. Status ban jata hai IN_PROGRESS."
               }
             },
             {
               "name": "completeride",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "POST",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/rides/{{rideId}}/complete", "host": ["{{baseUrl}}"], "path": ["driver", "rides", "{{rideId}}", "complete"] },
-                "description": "▶️ **[STEP D2.6: COMPLETE RIDE]**\n- Status set hota hai: `COMPLETED`."
+                "description": "▶️ **[STEP 2.6: COMPLETE RIDE]**\n- **Purpose:** Destination par pahunch kar trip complete mark karta hai (Status: COMPLETED). Earnings driver ke account me jud jati hain."
               }
             },
             {
               "name": "driverridedetail",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/rides/{{rideId}}", "host": ["{{baseUrl}}"], "path": ["driver", "rides", "{{rideId}}"] },
-                "description": "▶️ **[STEP D2.7: DRIVER RIDE DETAILS]**\n- Active ride details from driver perspective."
+                "description": "▶️ **[STEP 2.7: GET DRIVER RIDE DETAILS]**\n- **Purpose:** Active ride ke pickup, dropoff aur fare details dekhta hai."
               }
             },
             {
               "name": "drivertracking",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/rides/{{rideId}}/tracking", "host": ["{{baseUrl}}"], "path": ["driver", "rides", "{{rideId}}", "tracking"] },
-                "description": "▶️ **[STEP D2.8: DRIVER LIVE TRACKING]**\n- Tracking metadata & driver last recorded GPS."
+                "description": "⏹️ **[STEP 2.8: DRIVER TRIP TRACKING - LIFECYCLE WORK END]**\n- **Purpose:** Trip navigation coordinates aur status monitor karta hai."
               }
             }
           ]
         },
         {
           "name": "Rating & Review",
-          "description": "### [MODULE 3: DRIVER RATINGS & REVIEWS]",
+          "description": "Driver Reviews, Ratings Summary & Moderation Reporting",
           "item": [
             {
               "name": "ratingssummary",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
-                "url": {
-                  "raw": "{{baseUrl}}/driver/ratings/summary?period=30d",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["driver", "ratings", "summary"],
-                  "query": [{ "key": "period", "value": "30d" }]
-                },
-                "description": "▶️ **[STEP D3.1: DRIVER RATINGS SUMMARY]**\n- Average rating, total ratings, 5-star to 1-star distribution breakdown."
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+                "url": { "raw": "{{baseUrl}}/driver/ratings/summary", "host": ["{{baseUrl}}"], "path": ["driver", "ratings", "summary"] },
+                "description": "▶️ **[STEP 3.1: WORK START - 5-STAR RATING SUMMARY]**\n- **Purpose:** Driver ki overall average rating aur 5-star distribution percentages show karta hai."
               }
             },
             {
               "name": "recentreviewrating",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": {
-                  "raw": "{{baseUrl}}/driver/ratings?page=1&limit=10&sort=newest&stars=5",
+                  "raw": "{{baseUrl}}/driver/ratings?page=1&limit=10",
                   "host": ["{{baseUrl}}"],
                   "path": ["driver", "ratings"],
-                  "query": [
-                    { "key": "page", "value": "1" },
-                    { "key": "limit", "value": "10" },
-                    { "key": "sort", "value": "newest" },
-                    { "key": "stars", "value": "5" }
-                  ]
+                  "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }]
                 },
-                "description": "▶️ **[STEP D3.2: RECENT RIDER REVIEWS]**\n- Rider feedback list with stars, comment & date."
+                "description": "▶️ **[STEP 3.2: PAGINATED REVIEWS LIST]**\n- **Purpose:** Riders dwara diye gaye feedback comments aur stars list karta hai."
               }
             },
             {
               "name": "singleratingdetails",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/ratings/{{ratingId}}", "host": ["{{baseUrl}}"], "path": ["driver", "ratings", "{{ratingId}}"] },
-                "description": "▶️ **[STEP D3.3: SINGLE REVIEW DETAILS]**\n- Specific review ka full feedback."
+                "description": "▶️ **[STEP 3.3: GET SINGLE RATING DETAIL]**\n- **Purpose:** Single rating ka detail fetch karta hai. Supports dummy ID (e.g. `rating_123`) smoothly without CastError."
               }
             },
             {
               "name": "reportreview",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"reason\": \"abusive\",\n  \"description\": \"This review contains abusive language.\"\n}"
+                  "raw": "{\n  \"reason\": \"abusive\",\n  \"description\": \"Customer was verbally aggressive and left an unfair 1-star rating.\"\n}",
+                  "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/driver/ratings/{{ratingId}}/report", "host": ["{{baseUrl}}"], "path": ["driver", "ratings", "{{ratingId}}", "report"] },
-                "description": "▶️ **[STEP D3.4: REPORT UNFAIR REVIEW]**\n- Review ko moderation ke liye `UNDER_REVIEW` flag karta hai."
+                "description": "⏹️ **[STEP 3.4: REPORT UNFAIR REVIEW - RATINGS WORK END]**\n- **Purpose:** Galat ya abusive rating ko admin moderation review ke liye report karta hai. Status ban jata hai UNDER_REVIEW."
               }
             }
           ]
         },
         {
           "name": "DriverPerformancestatus",
-          "description": "### [MODULE 4: DRIVER PERFORMANCE & STATS]",
+          "description": "Driver Performance Score, Trends, Shifts & Tiers",
           "item": [
             {
               "name": "driverperformance",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": {
                   "raw": "{{baseUrl}}/driver/performance?period=30d",
                   "host": ["{{baseUrl}}"],
                   "path": ["driver", "performance"],
                   "query": [{ "key": "period", "value": "30d" }]
                 },
-                "description": "▶️ **[STEP D4.1: PERFORMANCE SCORECARD]**\n- Pilot tier, completion rate, cancellation rate, driver score."
+                "description": "▶️ **[STEP 4.1: WORK START - DRIVER PERFORMANCE SCORE]**\n- **Purpose:** Driver score (0-100), Tier (PRO_PILOT / PILOT / STANDARD), completion rate aur cancellation rate calculate karta hai."
               }
             },
             {
               "name": "score-breakdown",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/performance/score-breakdown", "host": ["{{baseUrl}}"], "path": ["driver", "performance", "score-breakdown"] },
-                "description": "▶️ **[STEP D4.2: PERFORMANCE SCORE FORMULA]**\n- Weightage analysis."
+                "description": "▶️ **[STEP 4.2: SCORE CALCULATION BREAKDOWN]**\n- **Purpose:** Score calculation weights aur metrics definitions deta hai."
               }
             },
             {
               "name": "trends",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": {
                   "raw": "{{baseUrl}}/driver/performance/trends?period=week",
                   "host": ["{{baseUrl}}"],
                   "path": ["driver", "performance", "trends"],
                   "query": [{ "key": "period", "value": "week" }]
                 },
-                "description": "▶️ **[STEP D4.3: PERFORMANCE TRENDS]**\n- Weekly performance graph snapshots."
+                "description": "▶️ **[STEP 4.3: PERFORMANCE TRENDS]**\n- **Purpose:** Weekly/Monthly performance trend line graph data deta hai."
               }
             },
             {
               "name": "shifts",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/performance/shifts", "host": ["{{baseUrl}}"], "path": ["driver", "performance", "shifts"] },
-                "description": "▶️ **[STEP D4.4: DRIVER WORKING SHIFTS]**\n- Shift timing & trip hours."
+                "description": "⏹️ **[STEP 4.4: SHIFTS ANALYTICS - PERFORMANCE WORK END]**\n- **Purpose:** Working shift hours aur trips per hour analysis deta hai."
               }
             }
           ]
         },
         {
           "name": "driverdashboard & earning",
-          "description": "### [MODULE 5: DRIVER EARNINGS, TRIPS & INCENTIVES]",
+          "description": "Driver Earnings, Daily/Weekly/Monthly Breakdown, Trip History & Incentives",
           "item": [
             {
               "name": "driverdashboardsummary",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/dashboard/summary", "host": ["{{baseUrl}}"], "path": ["driver", "dashboard", "summary"] },
-                "description": "▶️ **[STEP D5.1: DASHBOARD SUMMARY]**\n- Today's earnings, online hours, lifetime trips & rating status."
+                "description": "▶️ **[STEP 5.1: WORK START - COMPREHENSIVE DASHBOARD SUMMARY]**\n- **Purpose:** Driver home screen ke liye today's earnings, completed trips, online hours aur lifetime earnings show karta hai."
               }
             },
             {
               "name": "dailyearnings",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/earnings/daily", "host": ["{{baseUrl}}"], "path": ["driver", "earnings", "daily"] },
-                "description": "▶️ **[STEP D5.2: DAILY EARNINGS]**\n- Today's earnings & trip counts."
+                "description": "▶️ **[STEP 5.2: DAILY EARNINGS]**\n- **Purpose:** Aaj ke din ki total kamayi, trip count aur online hours return karta hai."
               }
             },
             {
               "name": "weeklyearning",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/earnings/weekly", "host": ["{{baseUrl}}"], "path": ["driver", "earnings", "weekly"] },
-                "description": "▶️ **[STEP D5.3: WEEKLY EARNINGS]**\n- Weekly payout summary."
+                "description": "▶️ **[STEP 5.3: WEEKLY EARNINGS]**\n- **Purpose:** Is hafte ki total kamayi aur completed trips summary deta hai."
               }
             },
             {
               "name": "monthlyearning",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/earnings/monthly", "host": ["{{baseUrl}}"], "path": ["driver", "earnings", "monthly"] },
-                "description": "▶️ **[STEP D5.4: MONTHLY EARNINGS]**\n- Monthly earnings statement."
+                "description": "▶️ **[STEP 5.4: MONTHLY EARNINGS]**\n- **Purpose:** Is mahine ki aggregate gross earnings show karta hai."
               }
             },
             {
               "name": "earningbreakdown",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
-                "url": { "raw": "{{baseUrl}}/driver/earnings/breakdown", "host": ["{{baseUrl}}"], "path": ["driver", "earnings", "breakdown"] },
-                "description": "▶️ **[STEP D5.5: EARNINGS BREAKDOWN]**\n- Itemized: Base fare, distance, surge, tips, incentives, platform deduction."
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/earnings/breakdown?period=week",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["driver", "earnings", "breakdown"],
+                  "query": [{ "key": "period", "value": "week" }]
+                },
+                "description": "▶️ **[STEP 5.5: ITEMIZED EARNINGS BREAKDOWN]**\n- **Purpose:** Itemized kamayi show karta hai: Base Fare + Distance Fare + Surge + Tips + Incentives Bonus minus Platform Deductions."
               }
             },
             {
               "name": "drivertriphistory",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": {
-                  "raw": "{{baseUrl}}/driver/trips?status=completed&page=1&limit=10",
+                  "raw": "{{baseUrl}}/driver/trips?status=COMPLETED&limit=20",
                   "host": ["{{baseUrl}}"],
                   "path": ["driver", "trips"],
-                  "query": [
-                    { "key": "status", "value": "completed" },
-                    { "key": "page", "value": "1" },
-                    { "key": "limit", "value": "10" }
-                  ]
+                  "query": [{ "key": "status", "value": "COMPLETED" }, { "key": "limit", "value": "20" }]
                 },
-                "description": "▶️ **[STEP D5.6: DRIVER COMPLETED TRIPS]**\n- All trips completed by this driver."
+                "description": "▶️ **[STEP 5.6: DRIVER COMPLETED TRIPS HISTORY]**\n- **Purpose:** Driver ke completed trips ki list with fare amount return karta hai."
               }
             },
             {
               "name": "singletripdetail",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
-                "url": { "raw": "{{baseUrl}}/driver/trips/{{rideId}}", "host": ["{{baseUrl}}"], "path": ["driver", "trips", "{{rideId}}"] },
-                "description": "▶️ **[STEP D5.7: SINGLE TRIP DETAIL]**\n- Particular trip route, pickup, dropoff & fare."
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+                "url": { "raw": "{{baseUrl}}/driver/trips/{{tripId}}", "host": ["{{baseUrl}}"], "path": ["driver", "trips", "{{tripId}}"] },
+                "description": "▶️ **[STEP 5.7: SINGLE TRIP INVOICE DETAIL]**\n- **Purpose:** Kisi ek specific trip ka complete pickup/drop aur fare breakup deta hai."
               }
             },
             {
               "name": "driverincentivetrip",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  if (res.data && res.data.items && res.data.items.length > 0) {",
+                      "    pm.collectionVariables.set(\"incentiveId\", res.data.items[0].id || res.data.items[0]._id);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/incentives", "host": ["{{baseUrl}}"], "path": ["driver", "incentives"] },
-                "description": "▶️ **[STEP D5.8: ACTIVE INCENTIVES LIST]**\n- Daily, peak rush, and weekend bonus targets."
+                "description": "▶️ **[STEP 5.8: ACTIVE DRIVER INCENTIVES / QUESTS]**\n- **Purpose:** Active daily/weekly quest targets (e.g. Complete 10 Trips for ₹500 Bonus) list karta hai. Auto-saves `incentiveId`."
               }
             },
             {
               "name": "incentivedetails",
               "request": {
-                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{driverToken}}", "type": "string" }] },
                 "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/incentives/{{incentiveId}}", "host": ["{{baseUrl}}"], "path": ["driver", "incentives", "{{incentiveId}}"] },
-                "description": "▶️ **[STEP D5.9: INCENTIVE TARGET DETAIL]**\n- Goal progress %, reward amount, and terms."
+                "description": "⏹️ **[STEP 5.9: INCENTIVE TARGET DETAILS - WORK END]**\n- **Purpose:** Target trips, completed trips, progress percentage aur reward cash bonus details fetch karta hai (ID: `inc_daily_10`)."
               }
             }
           ]
@@ -763,3 +1044,4 @@
     }
   ]
 }
+
