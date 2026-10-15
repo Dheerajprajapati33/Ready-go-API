@@ -13,7 +13,9 @@
     { "key": "offerId", "value": "", "type": "string" },
     { "key": "tripId", "value": "", "type": "string" },
     { "key": "ratingId", "value": "rating_123", "type": "string" },
-    { "key": "incentiveId", "value": "inc_daily_10", "type": "string" }
+    { "key": "incentiveId", "value": "inc_daily_10", "type": "string" },
+    { "key": "eventId", "value": "", "type": "string" },
+    { "key": "contactId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -561,6 +563,24 @@
             },
             {
               "name": "sos",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201 || pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  var eventId = res.data?.eventId || res.data?._id || res.data?.id;",
+                      "  if (eventId) {",
+                      "    pm.collectionVariables.set(\"eventId\", eventId);",
+                      "    console.log(\"Saved eventId:\", eventId);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
                 "method": "POST",
                 "header": [
@@ -573,7 +593,50 @@
                   "options": { "raw": { "language": "json" } }
                 },
                 "url": { "raw": "{{baseUrl}}/safety/sos", "host": ["{{baseUrl}}"], "path": ["safety", "sos"] },
-                "description": "▶️ **[EMERGENCY SOS ALERT]**\n- **Purpose:** Panic / SOS button press karne par safety response team aur emergency contacts ko trigger karta hai. Works with real ObjectId or test string like 'ride_123'."
+                "description": "▶️ **[EMERGENCY SOS ALERT]**\n- **Purpose:** Panic / SOS button press karne par safety response team aur emergency contacts ko trigger karta hai. Response se `eventId` auto-save ho jata hai."
+              }
+            },
+            {
+              "name": "event-sos",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+                "url": { "raw": "{{baseUrl}}/safety/events/{{eventId}}", "host": ["{{baseUrl}}"], "path": ["safety", "events", "{{eventId}}"] },
+                "description": "▶️ **[GET SAFETY EVENT DETAILS]**\n- **Purpose:** Safety SOS event ki live details, status, timeline aur dispatch info fetch karta hai."
+              }
+            },
+            {
+              "name": "acknowledge-sos",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"note\": \"SOS acknowledged by safety team / user\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/safety/events/{{eventId}}/acknowledge", "host": ["{{baseUrl}}"], "path": ["safety", "events", "{{eventId}}", "acknowledge"] },
+                "description": "▶️ **[ACKNOWLEDGE SOS]**\n- **Purpose:** Safety event ko acknowledge karta hai (status becomes ACKNOWLEDGED)."
+              }
+            },
+            {
+              "name": "resolve-sos",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"note\": \"Assistance completed, rider is safe\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/safety/events/{{eventId}}/resolve", "host": ["{{baseUrl}}"], "path": ["safety", "events", "{{eventId}}", "resolve"] },
+                "description": "▶️ **[RESOLVE SOS]**\n- **Purpose:** Safety incident ko resolve karta hai (status becomes RESOLVED)."
               }
             }
           ]

@@ -4,7 +4,9 @@ import User from "../models/User.js";
 export async function requireAuth(req, res, next) {
   try {
     const header = req.headers.authorization || "";
-    const [scheme, token] = header.split(" ");
+    const parts = header.trim().split(/\s+/);
+    const scheme = parts[0];
+    const token = parts.slice(1).join(" ").trim().replace(/^["']|["']$/g, "");
     if (scheme !== "Bearer" || !token) return res.status(401).json({
       success: false, message: "Bearer access token required", code: "UNAUTHENTICATED"
     });

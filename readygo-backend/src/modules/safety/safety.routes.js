@@ -130,17 +130,41 @@ router.post("/rider/safety/sos", requireAuth, validateBody(z.object({
   message: z.string().max(500).optional(),
   triggerSource: z.enum(["HOLD_BUTTON", "IN_APP", "ADMIN"]).default("HOLD_BUTTON")
 })), handleSosTrigger);
-router.get("/safety/events/:eventId",requireAuth,asyncHandler(async(req,res)=>{
- const e=await SafetyEvent.findById(req.params.eventId);
- if(!e)return fail(res,404,"Safety event not found","NOT_FOUND");
- if(String(e.userId)!==String(req.user._id)&&!["admin","safety"].includes(req.user.role))return fail(res,403,"Forbidden","FORBIDDEN");
- return ok(res,e);
+router.get("/safety/events/:eventId", requireAuth, asyncHandler(async (req, res) => {
+  const e = await SafetyEvent.findById(req.params.eventId);
+  if (!e) return fail(res, 404, "Safety event not found", "NOT_FOUND");
+  if (String(e.userId) !== String(req.user._id) && !["admin", "safety"].includes(req.user.role)) {
+    return fail(res, 403, "Forbidden", "FORBIDDEN");
+  }
+  return ok(res, e, "Safety event details retrieved");
 }));
-router.post("/safety/events/:eventId/acknowledge",requireAuth,allowRoles("admin","safety"),asyncHandler(async(req,res)=>updateStatus(req,res,"ACKNOWLEDGED")));
-router.post("/safety/events/:eventId/resolve",requireAuth,allowRoles("admin","safety"),asyncHandler(async(req,res)=>updateStatus(req,res,"RESOLVED")));
-async function updateStatus(req,res,status){
- const e=await SafetyEvent.findById(req.params.eventId);if(!e)return fail(res,404,"Safety event not found","NOT_FOUND");
- e.status=status;e.eventTimeline.push({status,actorId:req.user._id,note:req.body?.note||""});await e.save();return ok(res,e);
+
+async function updateStatus(req, res, status) {
+  const e = await SafetyEvent.findById(req.params.eventId);
+  if (!e) return fail(res, 404, "Safety event not found", "NOT_FOUND");
+
+  const isOwner = String(e.userId) === String(req.user._id);
+  const isPrivileged = ["admin", "safety"].includes(req.user.role);
+
+  if (!isOwner && !isPrivileged) {
+    return fail(res, 403, "Insufficient permissions to update this safety event", "FORBIDDEN");
+  }
+
+  e.status = status;
+  e.eventTimeline.push({
+    status,
+    actorId: req.user._id,
+    note: req.body?.note || (status === "RESOLVED" ? "SOS resolved" : (status === "CANCELLED" ? "SOS cancelled" : "SOS acknowledged")),
+    at: new Date()
+  });
+  await e.save();
+
+  return ok(res, e, `Safety event ${status.toLowerCase()} successfully`);
 }
-router.get("/admin/safety/events",requireAuth,allowRoles("admin","safety"),asyncHandler(async(req,res)=>ok(res,await SafetyEvent.find({status:{$ne:"RESOLVED"}}).sort({createdAt:-1}).limit(100))));
+
+router.post("/safety/events/:eventId/acknowledge", requireAuth, allowRoles("admin", "safety", "rider", "driver"), asyncHandler(async (req, res) => updateStatus(req, res, "ACKNOWLEDGED")));
+router.post("/safety/events/:eventId/resolve", requireAuth, allowRoles("admin", "safety", "rider", "driver"), asyncHandler(async (req, res) => updateStatus(req, res, "RESOLVED")));
+router.post("/safety/events/:eventId/cancel", requireAuth, allowRoles("admin", "safety", "rider", "driver"), asyncHandler(async (req, res) => updateStatus(req, res, "CANCELLED")));
+
+router.get("/admin/safety/events", requireAuth, allowRoles("admin", "safety"), asyncHandler(async (req, res) => ok(res, await SafetyEvent.find({ status: { $ne: "RESOLVED" } }).sort({ createdAt: -1 }).limit(100))));
 export default router;
