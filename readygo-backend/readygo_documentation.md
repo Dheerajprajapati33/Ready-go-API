@@ -593,15 +593,78 @@ DriverPage
 
 ---
 
-## 🟢 1.5 `driver document upload` (Driver Onboarding & Verification)
+## 🟢 1.5 `Driver Application & Onboarding` (Pilot Registration, Documents & Review)
 
 > 📌 **Workflow Steps:**  
-> **Start:** Document Screen ➡️ **Step 1.5:** `uploadspresign` (Presign URL) ➡️ **Step 1.6:** `registerdocument` (Save License/RC) ➡️ **Step 1.7:** `Get Driver Documents` ➡️ **End:** `Get Application Status`
+> **Start:** Onboarding Requirements ➡️ **Step 1.5a:** `GET /driver/onboarding/requirements` ➡️ **Step 1.5b:** `POST /driver/applications` (Create pilot application) ➡️ **Step 1.5c:** `POST /uploads/presign` ➡️ **Step 1.5d:** `POST /driver/applications/me/documents` ➡️ **Step 1.5e:** `GET /driver/applications/me` ➡️ **Step 1.5f:** `PATCH /driver/applications/me` ➡️ **Step 1.5g:** `POST /driver/applications/me/submit` ➡️ **End:** `GET /driver/applications/me/status` (Timeline)
 
 ---
 
-### 1.5 `POST /uploads/presign` — [STEP 1.5: PRESIGN UPLOAD URL]
-- **Purpose:** Driver Driving License, RC, Insurance ya Aadhaar upload ke liye presigned URL aur document key return karta hai.
+### 1.5a `GET /driver/onboarding/requirements` — [GET ONBOARDING REQUIREMENTS]
+- **Purpose:** City aur vehicle category ke hisab se required documents list aur vehicle guidelines fetch karta hai.
+- **URL:** `GET {{baseUrl}}/driver/onboarding/requirements?city=Bengaluru&vehicleCategory=moto`
+- **Query Params:** `city`, `vehicleCategory` (optional)
+- **Response Data:**
+  - `documents`: List of required documents (`DRIVING_LICENSE`, `VEHICLE_RC`, `VEHICLE_INSURANCE`, `AADHAAR`, `PAN_CARD`).
+  - `vehicleGuidelines`: `minYear`, `maxAgeYears`, `allowedCategories`, `commercialPermitRequired`.
+  - `eligibilityCriteria`: `minAge`, `validLicense`, `smartphoneRequired`.
+
+---
+
+### 1.5b `POST /driver/applications` — [CREATE PILOT APPLICATION]
+- **Purpose:** Pilot application create karta hai with city & vehicle details. Agar user ka role abhi rider hai, to automatic elevate hokar `driver` ho jata hai.
+- **URL:** `POST {{baseUrl}}/driver/applications` (ya `POST http://localhost:5000/api/driver/applications`)
+- **Headers:**
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {{driverToken}}`
+- **Request Body:**
+```json
+{
+  "city": "Bengaluru",
+  "vehicleCategory": "moto",
+  "make": "Honda",
+  "model": "Activa 6G",
+  "registrationNumber": "KA04EM9201",
+  "color": "Silver"
+}
+```
+- **Response:** Application ID, vehicle details, aur onboarding progress status (`25%`).
+
+---
+
+### 1.5c `GET /driver/applications/me` — [GET APPLICATION DETAILS & PROGRESS]
+- **Purpose:** Driver application details, vehicle details, uploaded documents checklist, aur percentage progress return karta hai.
+- **URL:** `GET {{baseUrl}}/driver/applications/me`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Response Data:**
+  - `applicationId`, `applicationStatus`, `city`, `vehicleCategory`, `vehicle`
+  - `progress`: `{ completedSteps, totalSteps, percent, currentStep }`
+  - `documentsCount`, `documents`, `requiredDocuments`
+
+---
+
+### 1.5d `PATCH /driver/applications/me` — [UPDATE APPLICATION DETAILS]
+- **Purpose:** Final submission se pehle editable application details (city, vehicle make, model, registrationNumber, color) update karta hai.
+- **URL:** `PATCH {{baseUrl}}/driver/applications/me`
+- **Headers:**
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {{driverToken}}`
+- **Request Body:**
+```json
+{
+  "city": "Bengaluru",
+  "vehicleCategory": "moto",
+  "make": "Honda",
+  "model": "Activa 6G",
+  "registrationNumber": "KA04EM9201",
+  "color": "Matte Black"
+}
+```
+
+---
+
+### 1.5e `POST /uploads/presign` — [PRESIGN UPLOAD URL]
+- **Purpose:** Driver Driving License, RC, Insurance ya Aadhaar upload ke liye presigned URL aur fileKey return karta hai.
 - **URL:** `POST {{baseUrl}}/uploads/presign`
 - **Headers:** `Authorization: Bearer {{driverToken}}`
 - **Request Body:**
@@ -617,7 +680,7 @@ DriverPage
 
 ---
 
-### 1.6 `POST /driver/applications/me/documents` — [STEP 1.6: REGISTER DRIVER DOCUMENT]
+### 1.5f `POST /driver/applications/me/documents` — [REGISTER DRIVER DOCUMENT]
 - **Purpose:** Uploaded document metadata ko driver profile ke sath attach aur verify karta hai.
 - **URL:** `POST {{baseUrl}}/driver/applications/me/documents`
 - **Headers:** `Authorization: Bearer {{driverToken}}`
@@ -625,7 +688,7 @@ DriverPage
 ```json
 {
   "documentType": "DRIVING_LICENSE",
-  "documentUrl": "https://storage.readygo.internal/documents/license-front.jpg",
+  "fileKey": "{{fileKey}}",
   "side": "FRONT",
   "maskedNumber": "XXXX-XXXX-1234",
   "expiryDate": "2028-12-31"
@@ -634,36 +697,57 @@ DriverPage
 
 ---
 
-### 1.7 `GET /driver/applications/me/documents` — [STEP 1.7: GET DRIVER DOCUMENTS]
+### 1.5g `GET /driver/applications/me/documents` — [GET DRIVER DOCUMENTS LIST]
 - **Purpose:** Current driver ke saare registered documents fetch karta hai.
 - **URL:** `GET {{baseUrl}}/driver/applications/me/documents`
 - **Headers:** `Authorization: Bearer {{driverToken}}`
 
 ---
 
-### 1.8 `GET /driver/applications/me` — [STEP 1.8: GET APPLICATION ONBOARDING STATUS]
-- **Purpose:** Driver application approval status, documents checklist aur vehicle status return karta hai.
-- **URL:** `GET {{baseUrl}}/driver/applications/me`
+### 1.5h `POST /driver/applications/me/submit` — [SUBMIT COMPLETED APPLICATION]
+- **Purpose:** Completed application ko review ke liye submit karta hai. Backend driver profile ko approve karke online enable karta hai aur push notification bhejta hai.
+- **URL:** `POST {{baseUrl}}/driver/applications/me/submit`
 - **Headers:** `Authorization: Bearer {{driverToken}}`
-
----
-
-### 1.9 `GET /driver/vehicle` — [STEP 1.9: GET DRIVER VEHICLE]
-- **Purpose:** Driver vehicle details, category aur registration status return karta hai.
-- **URL:** `GET {{baseUrl}}/driver/vehicle`
-- **Headers:** `Authorization: Bearer {{driverToken}}`
-
----
-
-### 1.10 `PATCH /driver/vehicle` — [STEP 1.10: UPDATE DRIVER VEHICLE]
-- **Purpose:** Driver vehicle type, category aur registration number update karta hai.
-- **URL:** `PATCH {{baseUrl}}/driver/vehicle`
-- **Headers:** `Authorization: Bearer {{driverToken}}`
-- **Request Body:**
+- **Response:**
 ```json
 {
-  "registrationNumber": "UP32AB1234",
-  "vehicleType": "CAR"
+  "success": true,
+  "message": "Driver application submitted and approved",
+  "data": {
+    "applicationId": "...",
+    "applicationStatus": "APPROVED",
+    "availability": "ONLINE",
+    "progress": {
+      "completedSteps": 4,
+      "totalSteps": 4,
+      "percent": 100,
+      "currentStep": "APPROVED"
+    }
+  }
+}
+```
+
+---
+
+### 1.5i `GET /driver/applications/me/status` — [GET APPLICATION STATUS TIMELINE]
+- **Purpose:** Application review timeline (APPLICATION_CREATED, DOCUMENTS_SUBMITTED, VERIFICATION, READY_TO_DRIVE) fetch karta hai.
+- **URL:** `GET {{baseUrl}}/driver/applications/me/status`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Response Data:**
+  - `applicationStatus`, `isApproved`, `progress`
+  - `timeline`: Array of 4 review stages with their status (`COMPLETED`, `IN_PROGRESS`, `PENDING`) and timestamps.
+
+---
+
+### 1.5j `GET /driver/vehicle` & `PATCH /driver/vehicle` — [DRIVER VEHICLE]
+- **Purpose:** Driver vehicle details fetch aur update karta hai.
+- **URL:** `GET {{baseUrl}}/driver/vehicle` / `PATCH {{baseUrl}}/driver/vehicle`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Request Body for PATCH:**
+```json
+{
+  "registrationNumber": "KA04EM9201",
+  "vehicleType": "moto"
 }
 ```
 

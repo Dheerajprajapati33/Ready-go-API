@@ -716,12 +716,77 @@
               }
             },
             {
+              "name": "Create Pilot Application",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"city\": \"Bengaluru\",\n  \"vehicleCategory\": \"moto\",\n  \"make\": \"Honda\",\n  \"model\": \"Activa 6G\",\n  \"registrationNumber\": \"KA04EM9201\",\n  \"color\": \"Silver\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/driver/applications", "host": ["{{baseUrl}}"], "path": ["driver", "applications"] },
+                "description": "▶️ **[CREATE PILOT APPLICATION]**\n- **Purpose:** Pilot application create karta hai with city & vehicle details (make, model, regNumber, color)."
+              }
+            },
+            {
               "name": "Get Driver Application Status",
               "request": {
                 "method": "GET",
                 "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
                 "url": { "raw": "{{baseUrl}}/driver/applications/me", "host": ["{{baseUrl}}"], "path": ["driver", "applications", "me"] },
-                "description": "▶️ **[STEP 1.11: GET APPLICATION STATUS]**\n- **Purpose:** Driver application verification status fetch karta hai."
+                "description": "▶️ **[STEP 1.11: GET APPLICATION STATUS & PROGRESS]**\n- **Purpose:** Driver application verification status, vehicle details, aur progress fetch karta hai."
+              }
+            },
+            {
+              "name": "Update Application Details",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"city\": \"Bengaluru\",\n  \"vehicleCategory\": \"moto\",\n  \"make\": \"Honda\",\n  \"model\": \"Activa 6G\",\n  \"registrationNumber\": \"KA04EM9201\",\n  \"color\": \"Matte Black\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/driver/applications/me", "host": ["{{baseUrl}}"], "path": ["driver", "applications", "me"] },
+                "description": "▶️ **[UPDATE APPLICATION DETAILS]**\n- **Purpose:** Editable application details update karta hai before final submission."
+              }
+            },
+            {
+              "name": "Submit Completed Application",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
+                "url": { "raw": "{{baseUrl}}/driver/applications/me/submit", "host": ["{{baseUrl}}"], "path": ["driver", "applications", "me", "submit"] },
+                "description": "▶️ **[SUBMIT APPLICATION]**\n- **Purpose:** Completed application ko review ke liye submit karta hai."
+              }
+            },
+            {
+              "name": "Get Onboarding Requirements",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": { "raw": "{{baseUrl}}/driver/onboarding/requirements?city=Bengaluru&vehicleCategory=moto", "host": ["{{baseUrl}}"], "path": ["driver", "onboarding", "requirements"], "query": [{ "key": "city", "value": "Bengaluru" }, { "key": "vehicleCategory", "value": "moto" }] },
+                "description": "▶️ **[GET ONBOARDING REQUIREMENTS]**\n- **Purpose:** Required documents list aur vehicle guidelines fetch karta hai by city and category."
+              }
+            },
+            {
+              "name": "Get Application Status Timeline",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
+                "url": { "raw": "{{baseUrl}}/driver/applications/me/status", "host": ["{{baseUrl}}"], "path": ["driver", "applications", "me", "status"] },
+                "description": "▶️ **[GET APPLICATION STATUS TIMELINE]**\n- **Purpose:** Review timeline (APPLICATION_CREATED, DOCUMENTS_SUBMITTED, VERIFICATION, READY_TO_DRIVE) fetch karta hai."
               }
             }
           ]

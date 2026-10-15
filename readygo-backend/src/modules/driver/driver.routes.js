@@ -217,27 +217,171 @@ const handleUpdateDocument = asyncHandler(async (req, res) => {
 router.patch("/driver/applications/me/documents/:id", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(documentSchema), handleUpdateDocument);
 router.put("/driver/applications/me/documents/:id", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(documentSchema), handleUpdateDocument);
 
+const createApplicationSchema = z.object({
+  city: z.string().optional(),
+  vehicleCategory: z.string().optional(),
+  category: z.string().optional(),
+  vehicleType: z.string().optional(),
+  make: z.string().optional(),
+  model: z.string().optional(),
+  registrationNumber: z.string().optional(),
+  plateNumber: z.string().optional(),
+  color: z.string().optional(),
+  year: z.union([z.number(), z.string()]).optional(),
+  vehicle: z.object({
+    make: z.string().optional(),
+    model: z.string().optional(),
+    registrationNumber: z.string().optional(),
+    plateNumber: z.string().optional(),
+    color: z.string().optional(),
+    category: z.string().optional(),
+    vehicleType: z.string().optional(),
+    year: z.union([z.number(), z.string()]).optional()
+  }).passthrough().optional()
+}).passthrough();
+
+function computeProgress(applicationStatus, docsCount) {
+  if (applicationStatus === "APPROVED") {
+    return { completedSteps: 4, totalSteps: 4, percent: 100, currentStep: "APPROVED" };
+  }
+  if (applicationStatus === "SUBMITTED" || applicationStatus === "UNDER_REVIEW") {
+    return { completedSteps: 3, totalSteps: 4, percent: 75, currentStep: applicationStatus };
+  }
+  if (docsCount > 0) {
+    return { completedSteps: 2, totalSteps: 4, percent: 50, currentStep: "DOCUMENTS_UPLOADED" };
+  }
+  return { completedSteps: 1, totalSteps: 4, percent: 25, currentStep: "DOCUMENTS_PENDING" };
+}
+
+// --- 1. POST /driver/applications (Create pilot application) ---
+router.post("/driver/applications", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(createApplicationSchema), asyncHandler(async (req, res) => {
+  const p = await profileFor(req.user);
+
+  if (req.user.role === "rider") {
+    req.user.role = "driver";
+    await req.user.save();
+  }
+
+  const city = req.body.city || p.city || "Bengaluru";
+  const vCat = req.body.vehicleCategory || req.body.category || req.body.vehicle?.category || req.body.vehicle?.vehicleType || p.vehicleCategory || "moto";
+  const make = req.body.make || req.body.vehicle?.make || p.vehicle?.make || "Honda";
+  const model = req.body.model || req.body.vehicle?.model || p.vehicle?.model || "Activa 6G";
+  const regNo = req.body.registrationNumber || req.body.plateNumber || req.body.vehicle?.registrationNumber || req.body.vehicle?.plateNumber || p.vehicle?.registrationNumber || "DL 01 AB 1234";
+  const color = req.body.color || req.body.vehicle?.color || p.vehicle?.color || "Silver";
+  const year = req.body.year || req.body.vehicle?.year || p.vehicle?.year || 2023;
+
+  p.city = city;
+  p.vehicleCategory = vCat;
+  p.vehicle = {
+    category: vCat,
+    vehicleType: vCat,
+    make,
+    model,
+    plateNumber: regNo,
+    registrationNumber: regNo,
+    registrationStatus: p.vehicle?.registrationStatus || "VERIFIED",
+    color,
+    year: Number(year) || 2023
+  };
+
+  if (!p.applicationStatus || p.applicationStatus === "DRAFT") {
+    p.applicationStatus = "DOCUMENTS_PENDING";
+  }
+  await p.save();
+
+  const docs = await DriverDocument.find({ driverId: req.user._id });
+  const progress = computeProgress(p.applicationStatus, docs.length);
+
+  return ok(res, {
+    applicationId: p._id,
+    driverId: req.user._id,
+    status: p.applicationStatus,
+    applicationStatus: p.applicationStatus,
+    city: p.city,
+    vehicleCategory: p.vehicleCategory,
+    vehicle: p.vehicle,
+    progress,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt
+  }, "Driver application created successfully", 201);
+}));
+
+// --- 2. GET /driver/applications/me (Get my application details and progress) ---
 router.get("/driver/applications/me", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
   const p = await profileFor(req.user);
   const docs = await DriverDocument.find({ driverId: req.user._id }).sort({ createdAt: -1 });
+  const progress = computeProgress(p.applicationStatus, docs.length);
+
   return ok(res, {
     applicationId: p._id,
     driverId: req.user._id,
     applicationStatus: p.applicationStatus,
+    status: p.applicationStatus,
     availability: p.availability,
-    city: p.city || "Delhi NCR",
+    city: p.city || "Bengaluru",
     vehicleCategory: p.vehicleCategory || "moto",
+    vehicle: p.vehicle,
+    progress,
     documentsCount: docs.length,
     documents: docs,
     requiredDocuments: [
       { type: "DRIVING_LICENSE", title: "Driving License", status: docs.some(d => d.documentType === "DRIVING_LICENSE") ? "UPLOADED" : "PENDING" },
       { type: "VEHICLE_RC", title: "Registration Certificate (RC)", status: docs.some(d => d.documentType === "VEHICLE_RC") ? "UPLOADED" : "PENDING" },
       { type: "VEHICLE_INSURANCE", title: "Insurance Policy", status: docs.some(d => d.documentType === "VEHICLE_INSURANCE") ? "UPLOADED" : "PENDING" },
-      { type: "AADHAAR", title: "Aadhaar Card", status: docs.some(d => d.documentType === "AADHAAR") ? "UPLOADED" : "PENDING" }
-    ]
+      { type: "AADHAAR", title: "Aadhaar Card", status: docs.some(d => d.documentType === "AADHAAR") ? "UPLOADED" : "PENDING" },
+      { type: "PAN_CARD", title: "PAN Card", status: docs.some(d => d.documentType === "PAN_CARD") ? "UPLOADED" : "PENDING" }
+    ],
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt
   }, "Driver application status retrieved");
 }));
 
+// --- 3. PATCH /driver/applications/me (Update editable application details) ---
+router.patch("/driver/applications/me", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(createApplicationSchema), asyncHandler(async (req, res) => {
+  const p = await profileFor(req.user);
+
+  if (req.body.city) p.city = req.body.city;
+  const vCat = req.body.vehicleCategory || req.body.category || req.body.vehicle?.category || req.body.vehicle?.vehicleType;
+  if (vCat) p.vehicleCategory = vCat;
+
+  const currentVehicle = p.vehicle || {};
+  const make = req.body.make || req.body.vehicle?.make || currentVehicle.make;
+  const model = req.body.model || req.body.vehicle?.model || currentVehicle.model;
+  const regNo = req.body.registrationNumber || req.body.plateNumber || req.body.vehicle?.registrationNumber || req.body.vehicle?.plateNumber || currentVehicle.registrationNumber || currentVehicle.plateNumber;
+  const color = req.body.color || req.body.vehicle?.color || currentVehicle.color;
+  const year = req.body.year || req.body.vehicle?.year || currentVehicle.year;
+
+  p.vehicle = {
+    category: vCat || currentVehicle.category || p.vehicleCategory || "moto",
+    vehicleType: vCat || currentVehicle.vehicleType || p.vehicleCategory || "moto",
+    make: make || currentVehicle.make || "",
+    model: model || currentVehicle.model || "",
+    plateNumber: regNo || currentVehicle.plateNumber || "",
+    registrationNumber: regNo || currentVehicle.registrationNumber || "",
+    registrationStatus: currentVehicle.registrationStatus || "VERIFIED",
+    color: color || currentVehicle.color || "",
+    year: year ? Number(year) : (currentVehicle.year || 2023)
+  };
+
+  await p.save();
+
+  const docs = await DriverDocument.find({ driverId: req.user._id });
+  const progress = computeProgress(p.applicationStatus, docs.length);
+
+  return ok(res, {
+    applicationId: p._id,
+    driverId: req.user._id,
+    status: p.applicationStatus,
+    applicationStatus: p.applicationStatus,
+    city: p.city,
+    vehicleCategory: p.vehicleCategory,
+    vehicle: p.vehicle,
+    progress,
+    updatedAt: p.updatedAt
+  }, "Driver application updated successfully");
+}));
+
+// --- 4. POST /driver/applications/me/submit (Submit completed application) ---
 router.post("/driver/applications/me/submit", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
   const p = await profileFor(req.user);
   p.applicationStatus = "APPROVED";
@@ -253,10 +397,141 @@ router.post("/driver/applications/me/submit", requireAuth, allowRoles("driver", 
 
   return ok(res, {
     applicationId: p._id,
+    driverId: req.user._id,
     applicationStatus: p.applicationStatus,
-    availability: p.availability
+    status: p.applicationStatus,
+    availability: p.availability,
+    progress: {
+      completedSteps: 4,
+      totalSteps: 4,
+      percent: 100,
+      currentStep: "APPROVED"
+    },
+    submittedAt: new Date().toISOString()
   }, "Driver application submitted and approved");
 }));
+
+// --- 5. GET /driver/onboarding/requirements & GET /driver/applications/requirements ---
+const handleGetRequirements = asyncHandler(async (req, res) => {
+  const city = req.query.city || "Bengaluru";
+  const vehicleCategory = req.query.vehicleCategory || req.query.category || "moto";
+
+  return ok(res, {
+    city,
+    vehicleCategory,
+    documents: [
+      {
+        type: "DRIVING_LICENSE",
+        name: "Driving License",
+        required: true,
+        description: "Valid permanent commercial or private driving license",
+        sides: ["FRONT", "BACK"]
+      },
+      {
+        type: "VEHICLE_RC",
+        name: "Vehicle Registration Certificate (RC)",
+        required: true,
+        description: "Valid RC book/smartcard of the vehicle registered in India",
+        sides: ["FRONT"]
+      },
+      {
+        type: "VEHICLE_INSURANCE",
+        name: "Vehicle Insurance Policy",
+        required: true,
+        description: "Active comprehensive or third-party vehicle insurance cover",
+        sides: ["FRONT"]
+      },
+      {
+        type: "AADHAAR",
+        name: "Aadhaar Card",
+        required: true,
+        description: "Government issued Aadhaar card for KYC identity verification",
+        sides: ["FRONT", "BACK"]
+      },
+      {
+        type: "PAN_CARD",
+        name: "PAN Card",
+        required: false,
+        description: "PAN card for tax deductions and fast bank payouts",
+        sides: ["FRONT"]
+      }
+    ],
+    vehicleGuidelines: {
+      minYear: 2012,
+      maxAgeYears: 12,
+      allowedCategories: ["moto", "auto", "car_economy", "car_premium", "delivery"],
+      commercialPermitRequired: vehicleCategory === "car_economy" || vehicleCategory === "car_premium"
+    },
+    eligibilityCriteria: {
+      minAge: 18,
+      validLicense: true,
+      smartphoneRequired: true
+    }
+  }, "Driver onboarding requirements retrieved");
+});
+
+router.get("/driver/onboarding/requirements", handleGetRequirements);
+router.get("/driver/applications/requirements", handleGetRequirements);
+
+// --- 6. GET /driver/applications/me/status & GET /driver/applications/status ---
+const handleGetApplicationStatus = asyncHandler(async (req, res) => {
+  const p = await profileFor(req.user);
+  const docs = await DriverDocument.find({ driverId: req.user._id }).sort({ createdAt: -1 });
+
+  const isApproved = p.applicationStatus === "APPROVED";
+  const isSubmitted = p.applicationStatus === "SUBMITTED" || p.applicationStatus === "UNDER_REVIEW" || isApproved;
+  const hasDocs = docs.length > 0;
+
+  const timeline = [
+    {
+      step: 1,
+      code: "APPLICATION_CREATED",
+      title: "Application Created",
+      description: "Basic pilot application & vehicle details submitted",
+      status: "COMPLETED",
+      timestamp: p.createdAt
+    },
+    {
+      step: 2,
+      code: "DOCUMENTS_SUBMITTED",
+      title: "Documents Uploaded",
+      description: "Driving License, RC, and Identity documents provided",
+      status: hasDocs ? "COMPLETED" : "IN_PROGRESS",
+      timestamp: docs[0]?.createdAt || null
+    },
+    {
+      step: 3,
+      code: "VERIFICATION",
+      title: "Document Verification",
+      description: "Background check and document authenticity verification",
+      status: isApproved ? "COMPLETED" : (isSubmitted ? "IN_PROGRESS" : "PENDING"),
+      timestamp: isSubmitted ? p.updatedAt : null
+    },
+    {
+      step: 4,
+      code: "READY_TO_DRIVE",
+      title: "Ready to Drive",
+      description: "Account activated. Driver can go online and accept trips",
+      status: isApproved ? "COMPLETED" : "PENDING",
+      timestamp: isApproved ? p.updatedAt : null
+    }
+  ];
+
+  const progress = computeProgress(p.applicationStatus, docs.length);
+
+  return ok(res, {
+    applicationId: p._id,
+    driverId: req.user._id,
+    currentStatus: p.applicationStatus,
+    applicationStatus: p.applicationStatus,
+    isApproved,
+    progress,
+    timeline
+  }, "Driver application review status timeline retrieved");
+});
+
+router.get("/driver/applications/me/status", requireAuth, allowRoles("driver", "admin", "rider"), handleGetApplicationStatus);
+router.get("/driver/applications/status", requireAuth, allowRoles("driver", "admin", "rider"), handleGetApplicationStatus);
 
 router.delete("/driver/applications/me/documents/:id", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
   await DriverDocument.deleteOne({ _id: req.params.id, driverId: req.user._id });
