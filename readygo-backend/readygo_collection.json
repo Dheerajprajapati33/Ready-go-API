@@ -15,7 +15,8 @@
     { "key": "ratingId", "value": "rating_123", "type": "string" },
     { "key": "incentiveId", "value": "inc_daily_10", "type": "string" },
     { "key": "eventId", "value": "", "type": "string" },
-    { "key": "contactId", "value": "", "type": "string" }
+    { "key": "contactId", "value": "", "type": "string" },
+    { "key": "paymentId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -637,6 +638,108 @@
                 },
                 "url": { "raw": "{{baseUrl}}/safety/events/{{eventId}}/resolve", "host": ["{{baseUrl}}"], "path": ["safety", "events", "{{eventId}}", "resolve"] },
                 "description": "▶️ **[RESOLVE SOS]**\n- **Purpose:** Safety incident ko resolve karta hai (status becomes RESOLVED)."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rider paymet and wallet",
+          "description": "Payment Methods, Payment Intents, Confirmation, and Wallet Ledger",
+          "item": [
+            {
+              "name": "payment-method",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+                "url": { "raw": "{{baseUrl}}/payments/methods", "host": ["{{baseUrl}}"], "path": ["payments", "methods"] },
+                "description": "▶️ **[GET PAYMENT METHODS]**\n- **Purpose:** Supported payment options (UPI, Card, Wallet, Cash) fetch karta hai."
+              }
+            },
+            {
+              "name": "create-payment-intent",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201 || pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  var paymentId = res.data?.paymentId || res.data?.id;",
+                      "  if (paymentId) {",
+                      "    pm.collectionVariables.set(\"paymentId\", paymentId);",
+                      "    console.log(\"Saved paymentId:\", paymentId);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"purpose\": \"RIDE_PAYMENT\",\n  \"rideId\": \"ride_123\",\n  \"paymentMethodId\": \"wallet_123\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/payments/intents", "host": ["{{baseUrl}}"], "path": ["payments", "intents"] },
+                "description": "▶️ **[CREATE PAYMENT INTENT]**\n- **Purpose:** Ride payment ya wallet top-up ke liye payment intent create karta hai. Works with real ObjectId or test string like 'ride_123'. Auto-saves `paymentId`."
+              }
+            },
+            {
+              "name": "confirm-paymnet",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"paymentId\": \"{{paymentId}}\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/payments/{{paymentId}}/confirm", "host": ["{{baseUrl}}"], "path": ["payments", "{{paymentId}}", "confirm"] },
+                "description": "▶️ **[CONFIRM PAYMENT]**\n- **Purpose:** Client side se payment success confirm karke status SUCCEEDED karta hai aur ride ko PAID mark karta hai."
+              }
+            },
+            {
+              "name": "wallet-balance",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+                "url": { "raw": "{{baseUrl}}/rider/wallet", "host": ["{{baseUrl}}"], "path": ["rider", "wallet"] },
+                "description": "▶️ **[GET WALLET BALANCE]**\n- **Purpose:** Rider wallet balance fetch karta hai."
+              }
+            },
+            {
+              "name": "wallet-transactions",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+                "url": { "raw": "{{baseUrl}}/rider/wallet/transactions", "host": ["{{baseUrl}}"], "path": ["rider", "wallet", "transactions"] },
+                "description": "▶️ **[GET WALLET TRANSACTIONS]**\n- **Purpose:** Recent wallet transactions aur payment ledger list karta hai."
+              }
+            },
+            {
+              "name": "wallet-topup",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": 500\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/rider/wallet/topups", "host": ["{{baseUrl}}"], "path": ["rider", "wallet", "topups"] },
+                "description": "▶️ **[WALLET TOP-UP]**\n- **Purpose:** Wallet me money add / top-up karta hai."
               }
             }
           ]

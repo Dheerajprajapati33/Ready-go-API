@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 const schema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-  rideId: { type: mongoose.Schema.Types.ObjectId, ref: "Ride" },
+  rideId: { type: mongoose.Schema.Types.Mixed, ref: "Ride" },
   purpose: { type: String, enum: ["RIDE_PAYMENT", "WALLET_TOPUP"], required: true },
   amountPaise: { type: Number, required: true, min: 0 },
   currency: { type: String, default: "INR" },

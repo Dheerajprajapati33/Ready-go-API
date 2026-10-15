@@ -590,6 +590,125 @@ RiderPage(User)
 
 ---
 
+## 🟢 8. `Rider Payment & Wallet`
+
+> 📌 **Workflow Steps:**  
+> **Start:** Payment Screen ➡️ **Step 8.1:** `GET /payments/methods` ➡️ **Step 8.2:** `POST /payments/intents` ➡️ **Step 8.3:** `POST /payments/:paymentId/confirm` ➡️ **Step 8.4:** `GET /rider/wallet` ➡️ **End:** `POST /rider/wallet/topups`
+
+---
+
+### 8.1 `GET /payments/methods` — [GET PAYMENT METHODS]
+- **Purpose:** Supported payment options (UPI, Card, Wallet, Cash) list return karta hai.
+- **URL:** `GET {{baseUrl}}/payments/methods`
+- **Headers:** `Authorization: Bearer {{riderToken}}`
+- **Response:**
+```json
+{
+  "success": true,
+  "message": "Payment methods retrieved",
+  "data": [
+    { "id": "upi", "type": "UPI", "enabled": true, "title": "UPI (Google Pay, PhonePe, Paytm)" },
+    { "id": "card", "type": "CARD", "enabled": true, "title": "Credit / Debit Card" },
+    { "id": "wallet", "type": "WALLET", "enabled": true, "title": "ReadyGo Wallet" },
+    { "id": "cash", "type": "CASH", "enabled": true, "title": "Cash on Drop" }
+  ]
+}
+```
+
+---
+
+### 8.2 `POST /payments/intents` — [CREATE PAYMENT INTENT]
+- **Purpose:** Ride payment ya wallet topup ke liye payment intent create karta hai. `rideId` me MongoDB ObjectId ya custom test string (jaise `"ride_123"`) dono accept hota hai bina kisi CastError ke.
+- **URL:** `POST {{baseUrl}}/payments/intents`
+- **Headers:**
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {{riderToken}}`
+- **Request Body:**
+```json
+{
+  "purpose": "RIDE_PAYMENT",
+  "rideId": "ride_123",
+  "paymentMethodId": "wallet_123"
+}
+```
+- **Response (201 Created):**
+```json
+{
+  "success": true,
+  "message": "Payment intent created",
+  "data": {
+    "paymentId": "6ad0c...",
+    "status": "PENDING",
+    "amountPaise": 18500,
+    "amount": 185,
+    "currency": "INR",
+    "purpose": "RIDE_PAYMENT",
+    "provider": "mock",
+    "clientSecret": "pi_mock_..._secret"
+  }
+}
+```
+
+---
+
+### 8.3 `POST /payments/:paymentId/confirm` — [CONFIRM PAYMENT]
+- **Purpose:** Payment success confirm karke status `SUCCEEDED` karta hai aur associated ride ko `PAID` mark karta hai.
+- **URL:** `POST {{baseUrl}}/payments/{{paymentId}}/confirm` (ya `POST {{baseUrl}}/payments/confirm`)
+- **Headers:**
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {{riderToken}}`
+- **Request Body (optional if URL has ID):**
+```json
+{
+  "paymentId": "{{paymentId}}"
+}
+```
+- **Response:**
+```json
+{
+  "success": true,
+  "message": "Payment confirmed successfully",
+  "data": {
+    "paymentId": "6ad0c...",
+    "status": "SUCCEEDED",
+    "amount": 185,
+    "currency": "INR",
+    "paidAt": "2026-10-15T..."
+  }
+}
+```
+
+---
+
+### 8.4 `GET /rider/wallet` — [GET WALLET BALANCE]
+- **Purpose:** Current rider ka wallet balance aur currency return karta hai.
+- **URL:** `GET {{baseUrl}}/rider/wallet`
+- **Headers:** `Authorization: Bearer {{riderToken}}`
+
+---
+
+### 8.5 `GET /rider/wallet/transactions` — [WALLET TRANSACTIONS LEDGER]
+- **Purpose:** Wallet debit/credit transactions list karta hai.
+- **URL:** `GET {{baseUrl}}/rider/wallet/transactions`
+- **Headers:** `Authorization: Bearer {{riderToken}}`
+
+---
+
+### 8.6 `POST /rider/wallet/topups` — [WALLET TOP-UP]
+- **Purpose:** Wallet balance top-up karta hai.
+- **URL:** `POST {{baseUrl}}/rider/wallet/topups`
+- **Headers:**
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {{riderToken}}`
+- **Request Body:**
+```json
+{
+  "amount": 500
+}
+```
+
+---
+
 # 🚗 PART 2: DriverPage
 
 Driver module me 5 core sub-folders hain:
