@@ -19,6 +19,7 @@ Collection me har request ke sath **Test Scripts** attached hain, isliye aapko t
 | Variable Name | Default Value | Description |
 | :--- | :--- | :--- |
 | `baseUrl` | `http://localhost:5000/api/v1` | ReadyGo backend API root URL |
+| `socketUrl` | `ws://localhost:5000/socket.io/?EIO=4&transport=websocket` | Real-time WebSocket connection URL |
 | `riderToken` | *(Auto-Saved)* | Rider login hone ke baad auto-save ho jata hai |
 | `driverToken` | *(Auto-Saved)* | Driver login hone ke baad auto-save ho jata hai |
 | `rideId` | *(Auto-Saved)* | Nayi ride request create hone par auto-save hota hai |
@@ -26,6 +27,9 @@ Collection me har request ke sath **Test Scripts** attached hain, isliye aapko t
 | `tripId` | *(Auto-Saved)* | Single trip detail test karne ke liye |
 | `ratingId` | `rating_123` | Single rating lookup & report review ke liye |
 | `incentiveId` | `inc_daily_10` | Daily quest incentive details dekhne ke liye |
+| `eventId` | *(Auto-Saved)* | Safety SOS alert create hone par auto-save hota hai |
+| `contactId` | *(Auto-Saved)* | Emergency contact add karne par auto-save hota hai |
+| `paymentId` | *(Auto-Saved)* | Payment intent create hone par auto-save hota hai |
 
 ---
 
@@ -1251,43 +1255,119 @@ DriverPage
 
 # ⚡ PART 3: Realtime Events (Socket.IO Setup in Postman)
 
-Aapne point 3 me Socket events set up karne ke liye pucha tha:
+ReadyGo Section 9.1 ke complete Real-time Events architecture, Socket.IO handshake authentication, room membership authorization, aur data sanitization ka complete guide.
 
 ```
-ride:status          -> rideId, status, changedAt
-ride:driver_assigned -> rideId, driver summary, vehicle summary, ETA
-ride:location        -> rideId, latitude, longitude, heading, recordedAt
-driver:offer         -> offerId, ride summary, pickup distance, expiry
-safety:sos_status    -> eventId, status, updatedAt
-payment:status       -> paymentId, status, amountPaise
+9.1 Realtime Events Overview:
+1. ride:status          -> rideId, status, changedAt
+2. ride:driver_assigned -> rideId, driver summary, vehicle summary, ETA
+3. ride:location        -> rideId, latitude, longitude, heading, recordedAt
+4. driver:offer         -> offerId, ride summary, pickup distance, expiry
+5. safety:sos_status    -> eventId, status, updatedAt
+6. payment:status       -> paymentId, status, amountPaise
 ```
 
-### 🔌 Postman me Real-time Socket kaise connect karein:
-1. Postman open karein ➡️ Top left me **New** button dabayein ➡️ **WebSocket Request** select karein.
-2. Connection URL me type karein:
+---
+
+## 🔒 1. Security, Authentication & Room Authorization
+
+### A. Socket Handshake Authentication
+* Har socket connection ko authenticate karne ke liye JWT Access Token zaroori hai.
+* Token `socket.handshake.auth.token` ya `headers.authorization` (`Bearer <token>`) se verify hota hai.
+* Backend token decode karke user identity (`userId`, `role`) check karta hai aur verify karta hai ki `user.status === "ACTIVE"`.
+* Unauthorized ya expired tokens turant connection level par `Authentication error` ke sath reject ho jate hain.
+
+### B. Room Membership Authorization
+* **Personal User Rooms:** Connection bante hi socket apne isolated personal room me auto-join hota hai:
+  * Rider: `room:rider_{{riderId}}`
+  * Driver: `room:driver_{{driverId}}`
+  * Admin / Safety Desk: `room:safety_desk`
+* **Ride Room (`room:ride_{{rideId}}`):**
+  * Client ko trip updates lene ke liye `ride:join` event bhejna hota hai (`{"rideId": "..."}`).
+  * Backend verify karta hai ki requesting user us ride ka authorized **Rider**, **Driver**, ya **Safety/Admin** hai ya nahi. Kisi aur user ko access deny (`FORBIDDEN`) kiya jata hai.
+
+### C. Data Sanitization & Privacy Protection
+* **Driver Assignment (`ride:driver_assigned`):** Rider ko sirf public summary (name, avatar, vehicle plate/model, rating, ETA) milti hai. Driver ke private KYC documents, Aadhaar, ya home address filter out ho jate hain.
+* **Driver Offer (`driver:offer`):** Nearby drivers ko sirf pickup/drop approximate area aur fare milta hai. Rider ka personal contact number offer accept hone se pehle reveal nahi hota.
+* **Payment (`payment:status`):** Payment card details ya gateway secrets leak nahi hote; sirf `paymentId`, `status`, aur `amountPaise` broadcast hota hai.
+
+---
+
+## 🔌 2. Postman me Real-time Socket kaise connect karein:
+
+### Method A: Postman Native Socket.IO (Recommended)
+1. Postman me top-left **New** ➡️ **Socket.IO** select karein.
+2. Connection URL me daalein:
    ```
-   ws://localhost:5000/socket.io/?EIO=4&transport=websocket
+   http://localhost:5000
+   ```
+3. Version dropdown me **v4** select karein.
+4. **Auth** tab me **Bearer Token** select karein aur `{{riderToken}}` (ya `{{driverToken}}`) paste karein.
+5. **Connect** par click karein. Postman screen par `Connected` badge dikhega.
+
+### Method B: Raw WebSocket
+1. Postman me top-left **New** ➡️ **WebSocket Request** select karein.
+2. URL:
+   ```
+   {{socketUrl}}
+   (Default: ws://localhost:5000/socket.io/?EIO=4&transport=websocket)
    ```
 3. **Headers** tab me header add karein:
    ```
    Authorization: Bearer {{riderToken}}   (ya {{driverToken}})
    ```
-4. **Connect** par click karein. Postman screen par `Connected` status show hoga.
-5. Connected hone par Socket.IO rooms automatically join ho jate hain:
-   - `room:ride_{{rideId}}`
-   - `room:driver_{{driverId}}`
-   - `room:rider_{{riderId}}`
+4. **Connect** par click karein.
 
-### 📡 Event Listeners & Payloads:
+---
 
-| Event Name | Direction | Room | Payload Example |
-| :--- | :--- | :--- | :--- |
-| **`ride:status`** | Server ➡️ Rider/Driver | `room:ride_{rideId}` | `{"rideId":"...","status":"DRIVER_ARRIVED","changedAt":"2026-10-12T..."}` |
-| **`ride:driver_assigned`** | Server ➡️ Rider | `room:rider_{riderId}` | `{"rideId":"...","driver":{"fullName":"Ramesh Kumar","phone":"+91..."},"vehicle":{"plate":"DL 01 AB 1234"},"eta":3}` |
-| **`ride:location`** | Driver ➡️ Server ➡️ Rider | `room:ride_{rideId}` | `{"rideId":"...","latitude":28.6139,"longitude":77.2090,"heading":90,"recordedAt":"2026-10-12T..."}` |
-| **`driver:offer`** | Server ➡️ Driver | `room:driver_{driverId}` | `{"offerId":"...","ride":{"pickup":"...","dropoff":"...","fareAmount":50},"expiry":30}` |
-| **`safety:sos_status`** | Server ➡️ Desk/Rider | `room:safety_desk` | `{"eventId":"...","status":"OPEN","updatedAt":"2026-10-12T..."}` |
-| **`payment:status`** | Server ➡️ Rider | `room:ride_{rideId}` | `{"paymentId":"...","status":"SUCCESS","amountPaise":5000}` |
+## 📡 3. Event Listeners, Payloads & Triggers
+
+| Event Name | Direction | Room / Target | Payload Outline | Trigger Postman Request |
+| :--- | :--- | :--- | :--- | :--- |
+| **`ride:status`** | Server ➡️ Room | `room:ride_{{rideId}}` | `rideId, status, changedAt` | `POST /rides/cancel`, `POST /driver/rides/:id/arrived`, `POST /driver/rides/:id/start`, `POST /driver/rides/:id/complete` |
+| **`ride:driver_assigned`** | Server ➡️ Rider | `room:rider_{{riderId}}` | `rideId, driver, vehicle, eta` | `POST /driver/offers/:offerId/accept` |
+| **`ride:location`** | Driver ➡️ Server ➡️ Rider | `room:ride_{rideId}` | `rideId, latitude, longitude, heading, recordedAt` | Driver Socket Event `ride:location` ya `POST /driver/location` |
+| **`driver:offer`** | Server ➡️ Driver | `room:driver_{{driverId}}` | `offerId, ride, pickupDistance, expiry` | `POST /rides` (New Ride Request) |
+| **`safety:sos_status`** | Server ➡️ Desk / Rider | `room:safety_desk` & Rider Room | `eventId, status, updatedAt` | `POST /safety/sos`, `POST /safety/events/:id/acknowledge`, `POST /safety/events/:id/resolve` |
+| **`payment:status`** | Server ➡️ Rider | `room:ride_{{rideId}}` | `paymentId, status, amountPaise` | `POST /payments/:paymentId/confirm` |
+
+---
+
+## 📲 4. Inbound Client Events (Client ➡️ Server)
+
+### 1. `ride:join` (Join Trip Room)
+* **Payload:**
+```json
+{
+  "rideId": "6ad08..."
+}
+```
+* **Server Acknowledgment:**
+```json
+{
+  "success": true,
+  "message": "Joined ride room for 6ad08...",
+  "rideId": "6ad08..."
+}
+```
+
+### 2. `ride:location` (Driver Live Coordinates)
+* **Payload (Zod Validated & Throttled to max 1 update / 300ms):**
+```json
+{
+  "rideId": "6ad08...",
+  "latitude": 28.6139,
+  "longitude": 77.2090,
+  "heading": 90,
+  "recordedAt": "2026-10-15T12:00:00.000Z"
+}
+```
+
+---
+
+## 📱 5. Flutter Client Integration
+Flutter developers ke liye complete guide aur ready-to-use Singleton `SocketService` class `FLUTTER_SOCKET_SETUP_GUIDE.md` me available hai:
+* [FLUTTER_SOCKET_SETUP_GUIDE.md](file:///c:/Users/DELL/Downloads/ReadyGo_Backend_Starter/readygo-backend/FLUTTER_SOCKET_SETUP_GUIDE.md)
 
 ---
 
@@ -1301,4 +1381,8 @@ payment:status       -> paymentId, status, amountPaise
 
 3. **`riderToken` aur `driverToken` alag hain ya same?**  
    Postman collection me dono ke liye alag variables (`{{riderToken}}` aur `{{driverToken}}`) set hain. Jab aap Rider OTP verify karenge toh `riderToken` update hoga, aur jab Driver OTP verify karenge toh `driverToken` update hoga. Dono bilkul separate aur conflict-free hain.
+
+4. **Socket Handshake Rejected with `Authentication error`?**  
+   Check karein ki Postman Auth tab me `Bearer {{riderToken}}` pass ho raha hai aur token valid aur unexpired hai.
+
 
