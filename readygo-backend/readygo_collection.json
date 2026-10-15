@@ -741,6 +741,15 @@
                 "url": { "raw": "{{baseUrl}}/rider/wallet/topups", "host": ["{{baseUrl}}"], "path": ["rider", "wallet", "topups"] },
                 "description": "▶️ **[WALLET TOP-UP]**\n- **Purpose:** Wallet me money add / top-up karta hai."
               }
+            },
+            {
+              "name": "ride-receipt",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+                "url": { "raw": "{{baseUrl}}/rides/{{rideId}}/receipt", "host": ["{{baseUrl}}"], "path": ["rides", "{{rideId}}", "receipt"] },
+                "description": "▶️ **[GET RIDE RECEIPT]**\n- **Purpose:** Completed ride ki payment receipt, fare breakdown, aur status fetch karta hai. Supports both real ObjectId and custom test string like 'ride_123'."
+              }
             }
           ]
         }
