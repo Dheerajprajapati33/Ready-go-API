@@ -577,7 +577,7 @@ DriverPage
 
 ---
 
-### 1.4 `POST /driver/location` — [STEP 1.4: BROADCAST GPS LOCATION - WORK END]
+### 1.4 `POST /driver/location` — [STEP 1.4: BROADCAST GPS LOCATION]
 - **Purpose:** Mobile app se periodic GPS coordinates backend ko bhejta hai.
 - **URL:** `POST {{baseUrl}}/driver/location`
 - **Headers:** `Authorization: Bearer {{driverToken}}`
@@ -588,6 +588,51 @@ DriverPage
   "longitude": 77.2090,
   "heading": 90,
   "speedMps": 10.5
+}
+```
+
+---
+
+### 1.4b `POST /driver/auth/devices/register` — [REGISTER DRIVER DEVICE PUSH TOKEN]
+- **Purpose:** Driver mobile app ke Firebase Cloud Messaging (FCM) push token ko register / update karta hai. Iske baad driver ko profile submit, ride offer, ride cancel, etc. ke push alerts receive hote hain.
+- **URL:** `POST {{baseUrl}}/driver/auth/devices/register` (ya `POST {{baseUrl}}/driver/devices/register`)
+- **Headers:**
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {{driverToken}}`
+- **Request Body:**
+```json
+{
+  "deviceId": "device-driver-001",
+  "platform": "android",
+  "pushToken": "fcm_token_driver_xyz789"
+}
+```
+
+---
+
+### 1.4c `GET /driver/auth/devices` — [GET REGISTERED DRIVER DEVICES]
+- **Purpose:** Driver ke saare registered devices aur push tokens fetch karta hai.
+- **URL:** `GET {{baseUrl}}/driver/auth/devices` (ya `GET {{baseUrl}}/driver/devices`)
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 1.4d `DELETE /driver/auth/devices/:deviceId` — [UNREGISTER DRIVER DEVICE]
+- **Purpose:** Driver device ko unregister / delete karta hai.
+- **URL:** `DELETE {{baseUrl}}/driver/auth/devices/:deviceId` (ya `DELETE {{baseUrl}}/driver/devices/:deviceId`)
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 1.4e `POST /driver/auth/devices/test-push` — [TEST DRIVER PUSH NOTIFICATION - WORK END]
+- **Purpose:** Driver ke registered device par test push notification trigger karta hai.
+- **URL:** `POST {{baseUrl}}/driver/auth/devices/test-push`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Request Body:**
+```json
+{
+  "title": "Profile Submitted",
+  "body": "Your profile submitted successfully"
 }
 ```
 

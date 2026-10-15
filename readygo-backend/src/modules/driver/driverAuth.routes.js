@@ -36,9 +36,12 @@ const verifySchema = z.object({
   purpose: z.enum(["login", "registration"]).default("login"),
   otp: z.string().length(6),
   deviceId: z.string().max(120).optional(),
+  pushToken: z.string().optional(),
+  fcmToken: z.string().optional(),
+  platform: z.enum(["android", "ios", "web"]).optional(),
   role: z.string().optional(),
   vehicleCategory: z.string().optional()
-});
+}).passthrough();
 
 /**
  * POST /api/v1/driver/auth/otp/send
@@ -136,6 +139,16 @@ router.post("/otp/verify", otpLimiter, validateBody(verifySchema), asyncHandler(
     deviceId: req.body.deviceId,
     expiresAt
   });
+
+  const deviceId = req.body.deviceId || `device-${user._id}`;
+  const pushToken = req.body.pushToken || req.body.fcmToken || (req.body.deviceId ? `fcm_${req.body.deviceId}` : null);
+  if (deviceId && pushToken) {
+    await Device.findOneAndUpdate(
+      { userId: user._id, deviceId },
+      { userId: user._id, deviceId, pushToken, platform: req.body.platform || "android" },
+      { upsert: true, new: true, runValidators: true }
+    );
+  }
 
   return ok(res, {
     accessToken: signAccessToken(user),
@@ -251,15 +264,25 @@ router.post("/logout", requireAuth, asyncHandler(async (req, res) => {
  */
 router.post("/devices/register", requireAuth, validateBody(z.object({
   deviceId: z.string().min(1),
-  platform: z.enum(["android", "ios", "web"]),
+  platform: z.enum(["android", "ios", "web"]).default("android"),
   pushToken: z.string().min(1)
 })), asyncHandler(async (req, res) => {
   const device = await Device.findOneAndUpdate(
     { userId: req.user._id, deviceId: req.body.deviceId },
-    { ...req.body, userId: req.user._id },
+    { ...req.body, userId: req.user._id, platform: req.body.platform || "android" },
     { upsert: true, new: true, runValidators: true }
   );
   return ok(res, device, "Driver device registered");
+}));
+
+router.get("/devices", requireAuth, asyncHandler(async (req, res) => {
+  const devices = await Device.find({ userId: req.user._id });
+  return ok(res, devices, "Driver registered devices retrieved");
+}));
+
+router.delete("/devices/:deviceId", requireAuth, asyncHandler(async (req, res) => {
+  await Device.deleteOne({ userId: req.user._id, deviceId: req.params.deviceId });
+  return ok(res, {}, "Driver device removed");
 }));
 
 router.post("/devices/test-push", requireAuth, asyncHandler(async (req, res) => {

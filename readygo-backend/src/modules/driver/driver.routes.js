@@ -3,6 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import DriverProfile from "../../models/DriverProfile.js";
 import DriverDocument from "../../models/DriverDocument.js";
+import Device from "../../models/Device.js";
 import User from "../../models/User.js";
 import Ride from "../../models/Ride.js";
 import { requireAuth, allowRoles } from "../../middleware/auth.js";
@@ -13,6 +14,31 @@ import { sendPushNotification } from "../../services/notificationService.js";
 import driverAuthRoutes from "./driverAuth.routes.js";
 const router=Router();
 router.use("/driver/auth", driverAuthRoutes);
+
+// Driver FCM Push Notification Device Registration
+router.post("/driver/devices/register", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(z.object({
+  deviceId: z.string().min(1),
+  platform: z.enum(["android", "ios", "web"]).default("android"),
+  pushToken: z.string().min(1)
+})), asyncHandler(async (req, res) => {
+  const device = await Device.findOneAndUpdate(
+    { userId: req.user._id, deviceId: req.body.deviceId },
+    { ...req.body, userId: req.user._id, platform: req.body.platform || "android" },
+    { upsert: true, new: true, runValidators: true }
+  );
+  return ok(res, device, "Driver device registered");
+}));
+
+router.get("/driver/devices", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  const devices = await Device.find({ userId: req.user._id });
+  return ok(res, devices, "Driver registered devices retrieved");
+}));
+
+router.delete("/driver/devices/:deviceId", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  await Device.deleteOne({ userId: req.user._id, deviceId: req.params.deviceId });
+  return ok(res, {}, "Driver device removed");
+}));
+
 async function profileFor(user) {
   let p=await DriverProfile.findOne({userId:user._id});
   if(!p) p=await DriverProfile.create({userId:user._id,applicationStatus:user.role==="driver"?"DRAFT":"DOCUMENTS_PENDING"});

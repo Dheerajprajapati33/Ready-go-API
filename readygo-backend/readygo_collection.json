@@ -575,6 +575,58 @@
                 "url": { "raw": "{{baseUrl}}/driver/location", "host": ["{{baseUrl}}"], "path": ["driver", "location"] },
                 "description": "⏹️ **[STEP 1.4: BROADCAST GPS LOCATION - DRIVER AUTH WORK END]**\n- **Purpose:** Driver mobile app se live GPS coordinates backend ko bhejta hai matching engine ke liye."
               }
+            },
+            {
+              "name": "Register Driver Device (FCM)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"deviceId\": \"device-driver-001\",\n  \"platform\": \"android\",\n  \"pushToken\": \"fcm_token_driver_xyz789\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/driver/auth/devices/register", "host": ["{{baseUrl}}"], "path": ["driver", "auth", "devices", "register"] },
+                "description": "▶️ **[REGISTER DRIVER DEVICE PUSH TOKEN]**\n- **Purpose:** Driver mobile app ke push notifications (FCM / APNs) ke liye device register karta hai."
+              }
+            },
+            {
+              "name": "Get Driver Registered Devices",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+                "url": { "raw": "{{baseUrl}}/driver/auth/devices", "host": ["{{baseUrl}}"], "path": ["driver", "auth", "devices"] },
+                "description": "▶️ **[GET REGISTERED DRIVER DEVICES]**\n- **Purpose:** Driver ke registered push notification devices fetch karta hai."
+              }
+            },
+            {
+              "name": "Unregister Driver Device",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+                "url": { "raw": "{{baseUrl}}/driver/auth/devices/device-driver-001", "host": ["{{baseUrl}}"], "path": ["driver", "auth", "devices", "device-driver-001"] },
+                "description": "▶️ **[UNREGISTER DRIVER DEVICE]**\n- **Purpose:** Driver ke registered device ko unregister / delete karta hai."
+              }
+            },
+            {
+              "name": "Test Driver Push Notification",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Profile Submitted\",\n  \"body\": \"Your profile submitted successfully\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/driver/auth/devices/test-push", "host": ["{{baseUrl}}"], "path": ["driver", "auth", "devices", "test-push"] },
+                "description": "▶️ **[TEST DRIVER PUSH NOTIFICATION]**\n- **Purpose:** Driver ko test push notification bhejkar verify karta hai."
+              }
             }
           ]
         },
