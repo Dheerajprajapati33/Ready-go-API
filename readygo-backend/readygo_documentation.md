@@ -496,6 +496,100 @@ RiderPage(User)
 
 ---
 
+## 🟢 7. `Rider Safety Toolkit and Emergency SOS`
+
+> 📌 **Workflow Steps:**  
+> **Start:** Safety Hub ➡️ **Step 7.1:** `GET /rider/emergency-contacts` ➡️ **Step 7.2:** `POST /rider/emergency-contacts` ➡️ **Step 7.3:** `PATCH /rider/emergency-contacts/:id` ➡️ **Step 7.4:** `DELETE /rider/emergency-contacts/:id` ➡️ **Step 7.5:** `POST /safety/location-sharing` ➡️ **End:** `POST /safety/sos` (Emergency SOS Alert)
+
+---
+
+### 7.1 `GET /rider/emergency-contacts` — [GET EMERGENCY CONTACTS]
+- **Purpose:** User ke registered trusted emergency contacts fetch karta hai.
+- **URL:** `GET {{baseUrl}}/rider/emergency-contacts` (ya `GET {{baseUrl}}/safety/emergency-contacts`)
+- **Headers:** `Authorization: Bearer {{riderToken}}`
+
+---
+
+### 7.2 `POST /rider/emergency-contacts` — [ADD EMERGENCY CONTACT]
+- **Purpose:** Naya emergency contact add karta hai.
+- **URL:** `POST {{baseUrl}}/rider/emergency-contacts` (ya `POST {{baseUrl}}/safety/emergency-contacts`)
+- **Headers:**
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {{riderToken}}`
+- **Request Body:**
+```json
+{
+  "name": "Family Contact",
+  "phone": "+919876543210",
+  "relationship": "Brother"
+}
+```
+
+---
+
+### 7.3 `PATCH /rider/emergency-contacts/:contactId` — [UPDATE EMERGENCY CONTACT]
+- **Purpose:** Existing emergency contact ki details update karta hai.
+- **URL:** `PATCH {{baseUrl}}/rider/emergency-contacts/:contactId` (ya `PATCH {{baseUrl}}/safety/emergency-contacts/:contactId`)
+- **Headers:** `Authorization: Bearer {{riderToken}}`
+
+---
+
+### 7.4 `DELETE /rider/emergency-contacts/:contactId` — [DELETE EMERGENCY CONTACT]
+- **Purpose:** Emergency contact remove karta hai.
+- **URL:** `DELETE {{baseUrl}}/rider/emergency-contacts/:contactId` (ya `DELETE {{baseUrl}}/safety/emergency-contacts/:contactId`)
+- **Headers:** `Authorization: Bearer {{riderToken}}`
+
+---
+
+### 7.5 `POST /safety/location-sharing` — [LIVE TRIP LOCATION SHARING]
+- **Purpose:** Emergency contacts ke sath live ride tracking share enable/disable karta hai.
+- **URL:** `POST {{baseUrl}}/safety/location-sharing`
+- **Headers:** `Authorization: Bearer {{riderToken}}`
+- **Request Body:**
+```json
+{
+  "enabled": true,
+  "rideId": "ride_123"
+}
+```
+
+---
+
+### 7.6 `POST /safety/sos` — [TRIGGER EMERGENCY SOS]
+- **Purpose:** Panic / SOS trigger karta hai. Backend safety incident log karta hai aur rider ke phone par notification bhejta hai. `rideId` me MongoDB ObjectId ya custom test string (jaise `"ride_123"`) dono accept hota hai bina kisi CastError ke.
+- **URL:** `POST {{baseUrl}}/safety/sos`
+- **Headers:**
+  - `Content-Type: application/json`
+  - `Authorization: Bearer {{riderToken}}`
+- **Request Body:**
+```json
+{
+  "rideId": "ride_123",
+  "latitude": 12.9716,
+  "longitude": 77.5946,
+  "accuracyMeters": 8,
+  "message": "Emergency assistance requested",
+  "triggerSource": "HOLD_BUTTON"
+}
+```
+- **Response (201 Created):**
+```json
+{
+  "success": true,
+  "message": "SOS emergency alert received successfully",
+  "data": {
+    "eventId": "6ad08...",
+    "status": "OPEN",
+    "rideId": "ride_123",
+    "locationShared": true,
+    "createdAt": "2026-10-15T10:10:25.000Z",
+    "notificationStatus": "QUEUED"
+  }
+}
+```
+
+---
+
 # 🚗 PART 2: DriverPage
 
 Driver module me 5 core sub-folders hain:

@@ -467,6 +467,116 @@
               }
             }
           ]
+        },
+        {
+          "name": "Rider Safety Toolkit and Emergency SOS",
+          "description": "Emergency SOS, Live Location Sharing & Trusted Emergency Contacts",
+          "item": [
+            {
+              "name": "emergency-contact",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+                "url": { "raw": "{{baseUrl}}/rider/emergency-contacts", "host": ["{{baseUrl}}"], "path": ["rider", "emergency-contacts"] },
+                "description": "▶️ **[GET EMERGENCY CONTACTS]**\n- **Purpose:** User ke registered emergency contacts ki list return karta hai."
+              }
+            },
+            {
+              "name": "add-emergency-contact",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201 || pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  var contactId = res.data?._id || res.data?.id;",
+                      "  if (contactId) {",
+                      "    pm.collectionVariables.set(\"contactId\", contactId);",
+                      "    console.log(\"Saved contactId:\", contactId);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Family Contact\",\n  \"phone\": \"+919876543210\",\n  \"relationship\": \"Brother\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/rider/emergency-contacts", "host": ["{{baseUrl}}"], "path": ["rider", "emergency-contacts"] },
+                "description": "▶️ **[ADD EMERGENCY CONTACT]**\n- **Purpose:** Naya trusted emergency contact add karta hai."
+              }
+            },
+            {
+              "name": "updated-emergency-contact",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Emergency Primary Contact\",\n  \"phone\": \"+919876543299\",\n  \"relationship\": \"Parent\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/rider/emergency-contacts/{{contactId}}", "host": ["{{baseUrl}}"], "path": ["rider", "emergency-contacts", "{{contactId}}"] },
+                "description": "▶️ **[UPDATE EMERGENCY CONTACT]**\n- **Purpose:** Existing emergency contact ki details update karta hai."
+              }
+            },
+            {
+              "name": "delete-emergency-contact",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+                "url": { "raw": "{{baseUrl}}/rider/emergency-contacts/{{contactId}}", "host": ["{{baseUrl}}"], "path": ["rider", "emergency-contacts", "{{contactId}}"] },
+                "description": "▶️ **[DELETE EMERGENCY CONTACT]**\n- **Purpose:** Emergency contact ko remove karta hai."
+              }
+            },
+            {
+              "name": "safety-location-sharing",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"enabled\": true,\n  \"rideId\": \"{{rideId}}\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/safety/location-sharing", "host": ["{{baseUrl}}"], "path": ["safety", "location-sharing"] },
+                "description": "▶️ **[SAFETY LOCATION SHARING]**\n- **Purpose:** Emergency contacts ke sath live trip location sharing enable ya disable karta hai."
+              }
+            },
+            {
+              "name": "sos",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rideId\": \"ride_123\",\n  \"latitude\": 12.9716,\n  \"longitude\": 77.5946,\n  \"accuracyMeters\": 8,\n  \"message\": \"Emergency assistance requested\",\n  \"triggerSource\": \"HOLD_BUTTON\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": { "raw": "{{baseUrl}}/safety/sos", "host": ["{{baseUrl}}"], "path": ["safety", "sos"] },
+                "description": "▶️ **[EMERGENCY SOS ALERT]**\n- **Purpose:** Panic / SOS button press karne par safety response team aur emergency contacts ko trigger karta hai. Works with real ObjectId or test string like 'ride_123'."
+              }
+            }
+          ]
         }
       ]
     },

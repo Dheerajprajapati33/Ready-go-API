@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 const schema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-  rideId: { type: mongoose.Schema.Types.ObjectId, ref: "Ride", index: true },
+  rideId: { type: mongoose.Schema.Types.Mixed, ref: "Ride", index: true },
   location: { latitude: Number, longitude: Number, accuracyMeters: Number },
   message: { type: String, maxlength: 500 },
   triggerSource: { type: String, enum: ["HOLD_BUTTON", "IN_APP", "ADMIN"], default: "HOLD_BUTTON" },
