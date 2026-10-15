@@ -8,6 +8,7 @@ import { validateBody } from "../../middleware/validate.js";
 import { ok, fail } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { sendPushNotification } from "../../services/notificationService.js";
+import { emitSafetySosStatus } from "../../services/socketService.js";
 
 const router=Router();
 
@@ -103,6 +104,8 @@ const handleSosTrigger = asyncHandler(async (req, res) => {
     data: { type: "SOS_ALERT", eventId: String(event._id) }
   }).catch(err => console.error("[FCM] SOS alert notification error:", err));
 
+  emitSafetySosStatus(event._id, event.status, event.createdAt, event.userId);
+
   return ok(res, {
     eventId: event._id,
     status: event.status,
@@ -158,6 +161,8 @@ async function updateStatus(req, res, status) {
     at: new Date()
   });
   await e.save();
+
+  emitSafetySosStatus(e._id, e.status, new Date(), e.userId);
 
   return ok(res, e, `Safety event ${status.toLowerCase()} successfully`);
 }

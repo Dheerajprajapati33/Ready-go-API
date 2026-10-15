@@ -11,6 +11,7 @@ import { validateBody } from "../../middleware/validate.js";
 import { ok, fail } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { sendPushNotification } from "../../services/notificationService.js";
+import { emitRideStatus, emitDriverAssigned, emitRideLocation } from "../../services/socketService.js";
 import driverAuthRoutes from "./driverAuth.routes.js";
 const router=Router();
 router.use("/driver/auth", driverAuthRoutes);
@@ -98,7 +99,12 @@ router.patch("/driver/availability", requireAuth, allowRoles("driver", "admin", 
 router.post("/driver/location",requireAuth,allowRoles("driver"),validateBody(z.object({latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),accuracyMeters:z.number().min(0).max(10000).optional(),heading:z.number().min(0).max(360).optional(),speedMps:z.number().min(0).max(150).optional(),recordedAt:z.string().datetime().optional()})),asyncHandler(async(req,res)=>{
   const p=await profileFor(req.user);
   p.lastLocation={...req.body,recordedAt:req.body.recordedAt?new Date(req.body.recordedAt):new Date()};
-  await p.save(); return ok(res,{received:true,recordedAt:p.lastLocation.recordedAt});
+  await p.save();
+  const activeRide = await Ride.findOne({ driverId: req.user._id, status: { $in: ["DRIVER_ASSIGNED", "DRIVER_ARRIVED", "IN_PROGRESS"] } });
+  if (activeRide) {
+    emitRideLocation(activeRide._id, req.body.latitude, req.body.longitude, req.body.heading || 0, p.lastLocation.recordedAt);
+  }
+  return ok(res,{received:true,recordedAt:p.lastLocation.recordedAt});
 }));
 router.post("/driver/heartbeat",requireAuth,allowRoles("driver"),(req,res)=>ok(res,{alive:true,receivedAt:new Date().toISOString()}));
 router.get("/driver/profile",requireAuth,allowRoles("driver"),asyncHandler(async(req,res)=>{
@@ -688,6 +694,8 @@ const handleAcceptOffer = asyncHandler(async (req, res) => {
     ride = await Ride.findOne({ status: "SEARCHING_DRIVER" }).sort({ createdAt: -1 });
   }
 
+  const p = await profileFor(req.user);
+
   if (ride) {
     if (["COMPLETED", "CANCELLED_BY_RIDER", "CANCELLED_BY_DRIVER"].includes(ride.status)) {
       return fail(res, 409, "Ride is no longer available", "STATE_CONFLICT");
@@ -695,9 +703,12 @@ const handleAcceptOffer = asyncHandler(async (req, res) => {
     ride.driverId = req.user._id;
     ride.status = "DRIVER_ASSIGNED";
     await ride.save();
+    emitRideStatus(ride._id, ride.status);
+    emitDriverAssigned(ride.riderId, ride._id, req.user, p?.vehicle, 3);
     return ok(res, { offerId: req.params.offerId, rideId: ride._id, status: ride.status, ride }, "Offer accepted");
   }
 
+  emitDriverAssigned(req.user._id, req.params.offerId, req.user, p?.vehicle, 3);
   return ok(res, { offerId: req.params.offerId, status: "DRIVER_ASSIGNED", driverId: req.user._id }, "Offer accepted");
 });
 
@@ -732,6 +743,7 @@ router.post("/driver/rides/:rideId/arrived", requireAuth, allowRoles("driver", "
 
   ride.status = "DRIVER_ARRIVED";
   await ride.save();
+  emitRideStatus(ride._id, ride.status);
   return ok(res, ride, "Driver arrived at pickup location");
 }));
 
@@ -756,6 +768,7 @@ router.post("/driver/rides/:rideId/start", requireAuth, allowRoles("driver", "ad
   ride.status = "IN_PROGRESS";
   ride.startedAt = new Date();
   await ride.save();
+  emitRideStatus(ride._id, ride.status);
   return ok(res, ride, "Ride started");
 }));
 
@@ -780,6 +793,7 @@ router.post("/driver/rides/:rideId/complete", requireAuth, allowRoles("driver", 
   ride.status = "COMPLETED";
   ride.completedAt = new Date();
   await ride.save();
+  emitRideStatus(ride._id, ride.status);
   return ok(res, ride, "Ride completed successfully");
 }));
 

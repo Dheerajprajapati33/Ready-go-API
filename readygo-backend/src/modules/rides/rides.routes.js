@@ -10,6 +10,7 @@ import { requireAuth, allowRoles } from "../../middleware/auth.js";
 import { validateBody } from "../../middleware/validate.js";
 import { ok, fail } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { emitRideStatus, emitDriverOffer } from "../../services/socketService.js";
 const router=Router();
 router.post("/rides", requireAuth, allowRoles("rider"), validateBody(z.object({
   quoteId: z.string().optional(),
@@ -49,6 +50,11 @@ router.post("/rides", requireAuth, allowRoles("rider"), validateBody(z.object({
     }
   });
 
+  emitRideStatus(ride._id, ride.status);
+  DriverProfile.find({ availability: "ONLINE" }).limit(10).then(drivers => {
+    drivers.forEach(d => emitDriverOffer(d.userId, ride._id, ride, "1.2 km", 30));
+  }).catch(() => {});
+
   return ok(res, ride, "Ride requested; searching for nearby drivers", 201);
 }));
 router.get("/rider/rides",requireAuth,allowRoles("rider"),asyncHandler(async(req,res)=>{
@@ -75,7 +81,9 @@ router.post("/rides/:rideId/cancel",requireAuth,validateBody(z.object({reason:z.
   if(String(ride.riderId)!==String(req.user._id)&&String(ride.driverId)!==String(req.user._id)&&req.user.role!=="admin") return fail(res,403,"Forbidden","FORBIDDEN");
   if(["COMPLETED","CANCELLED_BY_RIDER","CANCELLED_BY_DRIVER","NO_DRIVER_FOUND"].includes(ride.status)) return fail(res,409,"Ride is already terminal","STATE_CONFLICT");
   ride.status=String(ride.riderId)===String(req.user._id)?"CANCELLED_BY_RIDER":"CANCELLED_BY_DRIVER";
-  ride.cancelReason=req.body.reason; await ride.save(); return ok(res,ride,"Ride cancelled");
+  ride.cancelReason=req.body.reason; await ride.save();
+  emitRideStatus(ride._id, ride.status);
+  return ok(res,ride,"Ride cancelled");
 }));
 const handleGetReceipt = asyncHandler(async (req, res) => {
   const rideIdParam = req.params.rideId;

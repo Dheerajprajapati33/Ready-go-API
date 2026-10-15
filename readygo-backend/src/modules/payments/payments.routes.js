@@ -7,6 +7,7 @@ import { requireAuth, allowRoles } from "../../middleware/auth.js";
 import { validateBody } from "../../middleware/validate.js";
 import { ok, fail } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { emitPaymentStatus, emitRideStatus } from "../../services/socketService.js";
 
 const router = Router();
 
@@ -114,7 +115,10 @@ const handleConfirmPayment = asyncHandler(async (req, res) => {
 
   if (p.rideId && mongoose.isValidObjectId(p.rideId)) {
     await Ride.updateOne({ _id: p.rideId }, { $set: { paymentStatus: "PAID", status: "COMPLETED" } });
+    emitRideStatus(p.rideId, "COMPLETED");
   }
+
+  emitPaymentStatus(p._id, p.status, p.amountPaise, p.rideId, p.userId);
 
   return ok(res, {
     paymentId: p._id,
