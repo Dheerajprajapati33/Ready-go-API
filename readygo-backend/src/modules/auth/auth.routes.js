@@ -14,6 +14,7 @@ import { ok, fail } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { validateBody } from "../../middleware/validate.js";
+import { sendPushNotification } from "../../services/notificationService.js";
 
 const router = Router();
 const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false });
@@ -42,11 +43,14 @@ router.post("/otp/verify", otpLimiter, validateBody(verifySchema), asyncHandler(
 
   let user = await User.findOne({ phone });
   const isNewUser = !user;
-  const requestedRole = req.body.role || (user ? user.role : "rider");
+  const requestedRole = req.body.role || (user?.role === "admin" ? "admin" : "rider");
   if (!user) {
     user = await User.create({ phone, role: requestedRole });
   } else if (req.body.role && user.role !== req.body.role) {
     user.role = req.body.role;
+    await user.save();
+  } else if (!req.body.role && user.role === "driver") {
+    user.role = "rider";
     await user.save();
   }
 
@@ -126,5 +130,13 @@ router.post("/devices/register", requireAuth, validateBody(z.object({
 router.delete("/devices/:deviceId", requireAuth, asyncHandler(async (req, res) => {
   await Device.deleteOne({ userId: req.user._id, deviceId: req.params.deviceId });
   return ok(res, {}, "Device removed");
+}));
+router.post("/devices/test-push", requireAuth, asyncHandler(async (req, res) => {
+  const result = await sendPushNotification(req.user._id, {
+    title: req.body?.title || "Profile Submitted",
+    body: req.body?.body || "Your profile submitted successfully",
+    data: { test: "true", timestamp: new Date().toISOString() }
+  });
+  return ok(res, result, "Push notification request processed");
 }));
 export default router;

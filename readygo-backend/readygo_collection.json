@@ -102,6 +102,15 @@
               }
             },
             {
+              "name": "unregisterdevice",
+              "request": {
+                "method": "DELETE",
+                "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+                "url": { "raw": "{{baseUrl}}/devices/device-001", "host": ["{{baseUrl}}"], "path": ["devices", "device-001"] },
+                "description": "▶️ **[STEP 1.4b: UNREGISTER DEVICE]**\n- **Purpose:** User ke registered push notification device ko unregister / delete karta hai."
+              }
+            },
+            {
               "name": "switch-role",
               "event": [
                 {

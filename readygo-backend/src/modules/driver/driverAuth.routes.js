@@ -14,6 +14,7 @@ import { ok, fail } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { validateBody } from "../../middleware/validate.js";
+import { sendPushNotification } from "../../services/notificationService.js";
 
 const router = Router();
 const otpLimiter = rateLimit({
@@ -259,6 +260,15 @@ router.post("/devices/register", requireAuth, validateBody(z.object({
     { upsert: true, new: true, runValidators: true }
   );
   return ok(res, device, "Driver device registered");
+}));
+
+router.post("/devices/test-push", requireAuth, asyncHandler(async (req, res) => {
+  const result = await sendPushNotification(req.user._id, {
+    title: req.body?.title || "Profile Submitted",
+    body: req.body?.body || "Your profile submitted successfully",
+    data: { test: "true", role: "driver", timestamp: new Date().toISOString() }
+  });
+  return ok(res, result, "Push notification request processed");
 }));
 
 export default router;

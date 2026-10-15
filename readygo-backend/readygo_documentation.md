@@ -126,6 +126,13 @@ RiderPage(User)
 
 ---
 
+### 1.3b `DELETE /devices/:deviceId` — [STEP 1.3b: UNREGISTER DEVICE]
+- **Purpose:** User ke registered push notification device ko unregister / delete karta hai.
+- **URL:** `DELETE {{baseUrl}}/devices/:deviceId` (ya `DELETE {{baseUrl}}/auth/devices/:deviceId`)
+- **Headers:** `Authorization: Bearer {{riderToken}}`
+
+---
+
 ### 1.4 `POST /auth/token/refresh` — [STEP 1.4: REFRESH EXPIRED TOKEN]
 - **Purpose:** Jab access token expire ho jaye to background me silent call karke naya access token leta hai.
 - **Request Body:**

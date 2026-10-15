@@ -9,6 +9,7 @@ import { requireAuth, allowRoles } from "../../middleware/auth.js";
 import { validateBody } from "../../middleware/validate.js";
 import { ok, fail } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { sendPushNotification } from "../../services/notificationService.js";
 import driverAuthRoutes from "./driverAuth.routes.js";
 const router=Router();
 router.use("/driver/auth", driverAuthRoutes);
@@ -77,6 +78,31 @@ router.post("/driver/heartbeat",requireAuth,allowRoles("driver"),(req,res)=>ok(r
 router.get("/driver/profile",requireAuth,allowRoles("driver"),asyncHandler(async(req,res)=>{
   const p=await profileFor(req.user);
   return ok(res,{id:req.user._id,phone:req.user.phone,fullName:req.user.fullName,applicationStatus:p.applicationStatus,availability:p.availability,averageRating:p.averageRating,totalRatings:p.totalRatings});
+}));
+router.patch("/driver/profile", requireAuth, allowRoles("driver", "admin", "rider"), validateBody(z.object({
+  fullName: z.string().trim().min(2).max(100).optional(),
+  email: z.string().email().optional(),
+  avatarUrl: z.string().url().optional()
+})), asyncHandler(async (req, res) => {
+  Object.assign(req.user, req.body);
+  req.user.profileCompleted = Boolean(req.user.fullName);
+  await req.user.save();
+
+  if (req.user.profileCompleted) {
+    sendPushNotification(req.user._id, {
+      title: "Profile Submitted",
+      body: "Your profile submitted successfully",
+      data: { type: "PROFILE_COMPLETED", role: "driver" }
+    }).catch(err => console.error("[FCM] Driver profile notification error:", err));
+  }
+
+  return ok(res, {
+    id: req.user._id,
+    phone: req.user.phone,
+    fullName: req.user.fullName,
+    email: req.user.email,
+    profileCompleted: req.user.profileCompleted
+  }, "Driver profile updated");
 }));
 const documentSchema = z.object({
   documentType: z.string().optional().default("DRIVING_LICENSE"),
@@ -217,6 +243,14 @@ router.post("/driver/applications/me/submit", requireAuth, allowRoles("driver", 
   p.applicationStatus = "APPROVED";
   p.availability = "ONLINE";
   await p.save();
+
+  // Send push notification when driver application/profile is submitted
+  sendPushNotification(req.user._id, {
+    title: "Profile Submitted",
+    body: "Your profile submitted successfully",
+    data: { type: "APPLICATION_SUBMITTED", applicationId: String(p._id) }
+  }).catch(err => console.error("[FCM] Driver application submit notification error:", err));
+
   return ok(res, {
     applicationId: p._id,
     applicationStatus: p.applicationStatus,

@@ -2,10 +2,12 @@ import crypto from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
 import User from "../../models/User.js";
+import Device from "../../models/Device.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { validateBody } from "../../middleware/validate.js";
 import { ok } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import { sendPushNotification } from "../../services/notificationService.js";
 const router = Router();
 router.get("/rider/profile", requireAuth, asyncHandler(async (req,res) => ok(res, { id:req.user._id, phone:req.user.phone, fullName:req.user.fullName, email:req.user.email, avatarUrl:req.user.avatarUrl, referralCode:req.user.referralCode, profileCompleted:req.user.profileCompleted })));
 router.patch("/rider/profile", requireAuth, validateBody(z.object({
@@ -17,6 +19,16 @@ router.patch("/rider/profile", requireAuth, validateBody(z.object({
   Object.assign(req.user, req.body);
   req.user.profileCompleted = Boolean(req.user.fullName);
   await req.user.save();
+
+  // Send push notification when profile is completed
+  if (req.user.profileCompleted) {
+    sendPushNotification(req.user._id, {
+      title: "Profile Submitted",
+      body: "Your profile submitted successfully",
+      data: { type: "PROFILE_COMPLETED", role: req.user.role || "rider" }
+    }).catch(err => console.error("[FCM] Rider profile notification error:", err));
+  }
+
   return ok(res, req.user, "Profile updated");
 }));
 
@@ -121,5 +133,37 @@ router.get("/promos/:code", (req,res)=>{
   if (promo) return ok(res, { valid: true, ...promo });
   return ok(res, { code, valid: true, discountPaise: 3000 });
 });
+
+// --- Device Registration & Unregister APIs ---
+
+router.delete("/devices/:deviceId", requireAuth, asyncHandler(async (req, res) => {
+  const result = await Device.deleteOne({ userId: req.user._id, deviceId: req.params.deviceId });
+  return ok(res, { deviceId: req.params.deviceId, deletedCount: result.deletedCount }, "Device removed successfully");
+}));
+
+router.post("/devices/register", requireAuth, validateBody(z.object({
+  deviceId: z.string().min(1),
+  platform: z.enum(["android", "ios", "web"]).optional().default("android"),
+  pushToken: z.string().optional().default("sample-token")
+}).passthrough()), asyncHandler(async (req, res) => {
+  const device = await Device.findOneAndUpdate(
+    { userId: req.user._id, deviceId: req.body.deviceId },
+    { ...req.body, userId: req.user._id },
+    { upsert: true, new: true, runValidators: true }
+  );
+  return ok(res, device, "Device registered");
+}));
+
+router.post("/devices/unregister", requireAuth, validateBody(z.object({
+  deviceId: z.string().min(1)
+}).passthrough()), asyncHandler(async (req, res) => {
+  const result = await Device.deleteOne({ userId: req.user._id, deviceId: req.body.deviceId });
+  return ok(res, { deviceId: req.body.deviceId, deletedCount: result.deletedCount }, "Device removed successfully");
+}));
+
+router.get("/devices", requireAuth, asyncHandler(async (req, res) => {
+  const devices = await Device.find({ userId: req.user._id });
+  return ok(res, { devices, count: devices.length }, "Devices retrieved");
+}));
 
 export default router;
