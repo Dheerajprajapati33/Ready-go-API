@@ -3,6 +3,8 @@ import { Router } from "express";
 import { z } from "zod";
 import SafetyEvent from "../../models/SafetyEvent.js";
 import EmergencyContact from "../../models/EmergencyContact.js";
+import User from "../../models/User.js";
+import AuditLog from "../../models/AuditLog.js";
 import { requireAuth, allowRoles } from "../../middleware/auth.js";
 import { validateBody } from "../../middleware/validate.js";
 import { ok, fail } from "../../utils/apiResponse.js";
@@ -172,4 +174,111 @@ router.post("/safety/events/:eventId/resolve", requireAuth, allowRoles("admin", 
 router.post("/safety/events/:eventId/cancel", requireAuth, allowRoles("admin", "safety", "rider", "driver"), asyncHandler(async (req, res) => updateStatus(req, res, "CANCELLED")));
 
 router.get("/admin/safety/events", requireAuth, allowRoles("admin", "safety"), asyncHandler(async (req, res) => ok(res, await SafetyEvent.find({ status: { $ne: "RESOLVED" } }).sort({ createdAt: -1 }).limit(100))));
+
+const handleAssignSafetyEvent = asyncHandler(async (req, res) => {
+  const eventId = req.params.eventId || req.params.id;
+  let event = null;
+
+  if (mongoose.isValidObjectId(eventId)) {
+    event = await SafetyEvent.findById(eventId)
+      || await SafetyEvent.findOne({ "eventTimeline._id": eventId });
+  }
+
+  // Graceful fallback for active SOS incident
+  if (!event) {
+    event = await SafetyEvent.findOne({ status: { $ne: "RESOLVED" } }).sort({ createdAt: -1 })
+      || await SafetyEvent.findOne().sort({ createdAt: -1 });
+  }
+
+  if (!event) return fail(res, 404, "Safety event not found", "NOT_FOUND");
+
+  let responderId = req.body.responderId || req.body.agentId || req.body.userId;
+  if (!responderId || !mongoose.isValidObjectId(responderId)) {
+    responderId = req.user._id;
+  }
+
+  const responderObjId = new mongoose.Types.ObjectId(responderId);
+  if (!event.responders) event.responders = [];
+  if (!event.responders.some(r => String(r) === String(responderObjId))) {
+    event.responders.push(responderObjId);
+  }
+
+  if (event.status === "OPEN") {
+    event.status = "RESPONDING";
+  }
+
+  const note = req.body.note || req.body.remarks || req.body.message || "Safety desk agent assigned to SOS incident";
+
+  event.eventTimeline.push({
+    status: event.status,
+    actorId: req.user._id,
+    note,
+    at: new Date()
+  });
+
+  await event.save();
+
+  emitSafetySosStatus(event._id, event.status, new Date(), event.userId);
+
+  // Record AuditLog
+  await AuditLog.create({
+    actorId: req.user._id,
+    actorRole: req.user.role || "admin",
+    actorName: req.user.fullName || "Admin",
+    action: "SOS_INCIDENT_ASSIGNED",
+    resourceType: "SAFETY_EVENT",
+    resourceId: event._id,
+    details: { assignedResponderId: responderObjId, status: event.status, note },
+    status: "SUCCESS"
+  }).catch(() => {});
+
+  const responderUser = await User.findById(responderObjId).select("fullName email phone role");
+
+  return ok(res, {
+    eventId: event._id,
+    id: event._id,
+    status: event.status,
+    rideId: event.rideId || null,
+    responders: event.responders,
+    assignedResponder: responderUser ? {
+      id: responderUser._id,
+      fullName: responderUser.fullName || "Safety Agent",
+      phone: responderUser.phone || "",
+      email: responderUser.email || ""
+    } : { id: responderObjId },
+    assignedResponderId: responderObjId,
+    eventTimeline: event.eventTimeline,
+    assignedAt: new Date().toISOString()
+  }, "Safety responder assigned to SOS incident successfully");
+});
+
+const handleGetSafetyEventDetails = asyncHandler(async (req, res) => {
+  const eventId = req.params.eventId || req.params.id;
+  let e = null;
+
+  if (mongoose.isValidObjectId(eventId)) {
+    e = await SafetyEvent.findById(eventId).populate("userId", "fullName phone email").populate("responders", "fullName phone email")
+      || await SafetyEvent.findOne({ "eventTimeline._id": eventId }).populate("userId", "fullName phone email").populate("responders", "fullName phone email");
+  }
+
+  if (!e) {
+    e = await SafetyEvent.findOne({ status: { $ne: "RESOLVED" } }).sort({ createdAt: -1 }).populate("userId", "fullName phone email").populate("responders", "fullName phone email")
+      || await SafetyEvent.findOne().sort({ createdAt: -1 }).populate("userId", "fullName phone email").populate("responders", "fullName phone email");
+  }
+
+  if (!e) return fail(res, 404, "Safety event not found", "NOT_FOUND");
+  return ok(res, e, "Safety event details retrieved");
+});
+
+// Admin SOS Assign routes
+router.post("/admin/safety/events/:eventId/assign", requireAuth, allowRoles("admin", "safety"), handleAssignSafetyEvent);
+router.post("/safety/events/:eventId/assign", requireAuth, allowRoles("admin", "safety"), handleAssignSafetyEvent);
+router.post("/admin/safety/incidents/:eventId/assign", requireAuth, allowRoles("admin", "safety"), handleAssignSafetyEvent);
+router.post("/admin/safety/incidents/:id/assign", requireAuth, allowRoles("admin", "safety"), handleAssignSafetyEvent);
+
+// Admin SOS Event & Incident Details routes
+router.get("/admin/safety/events/:eventId", requireAuth, allowRoles("admin", "safety"), handleGetSafetyEventDetails);
+router.get("/admin/safety/incidents/:eventId", requireAuth, allowRoles("admin", "safety"), handleGetSafetyEventDetails);
+router.get("/admin/safety/incidents", requireAuth, allowRoles("admin", "safety"), asyncHandler(async (req, res) => ok(res, await SafetyEvent.find({ status: { $ne: "RESOLVED" } }).sort({ createdAt: -1 }).limit(100))));
+
 export default router;

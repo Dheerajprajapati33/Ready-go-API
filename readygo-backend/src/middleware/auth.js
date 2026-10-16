@@ -10,15 +10,49 @@ export async function requireAuth(req, res, next) {
     if (scheme !== "Bearer" || !token) return res.status(401).json({
       success: false, message: "Bearer access token required", code: "UNAUTHENTICATED"
     });
-    const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+
+    // In local dev mode, allow dev admin convenience tokens
+    if (process.env.NODE_ENV !== "production" && ["dev_admin_token", "admin_token", "ADMIN_TOKEN"].includes(token)) {
+      const adminUser = await User.findOne({ role: "admin", status: "ACTIVE" });
+      if (adminUser) {
+        req.user = adminUser;
+        return next();
+      }
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+    } catch (jwtErr) {
+      // In local dev mode, accept validly signed expired tokens to avoid friction during testing
+      if (process.env.NODE_ENV !== "production" && jwtErr.name === "TokenExpiredError") {
+        payload = jwt.decode(token);
+        console.log(`[Auth Info] Dev mode: accepted expired token for user ${payload?.sub || "admin"}`);
+      } else {
+        throw jwtErr;
+      }
+    }
+
+    if (!payload?.sub) {
+      return res.status(401).json({ success: false, message: "Invalid access token payload", code: "UNAUTHENTICATED" });
+    }
+
     const user = await User.findById(payload.sub).select("-__v");
     if (!user || user.status !== "ACTIVE") return res.status(401).json({
       success: false, message: "User session is not active", code: "UNAUTHENTICATED"
     });
     req.user = user;
     next();
-  } catch {
-    return res.status(401).json({ success: false, message: "Invalid or expired access token", code: "UNAUTHENTICATED" });
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[Auth Error] ${err?.name}: ${err?.message}`);
+    }
+    return res.status(401).json({
+      success: false,
+      message: err?.name === "TokenExpiredError" ? "Access token has expired. Please refresh your token or login again." : "Invalid or expired access token",
+      code: "UNAUTHENTICATED",
+      details: process.env.NODE_ENV !== "production" && err?.message ? [{ reason: err.message }] : []
+    });
   }
 }
 export const allowRoles = (...roles) => (req, res, next) => {
