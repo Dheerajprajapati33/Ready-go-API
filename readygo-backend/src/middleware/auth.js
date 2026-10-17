@@ -13,11 +13,26 @@ export async function requireAuth(req, res, next) {
 
     // In local dev mode, allow dev admin convenience tokens
     if (process.env.NODE_ENV !== "production" && ["dev_admin_token", "admin_token", "ADMIN_TOKEN"].includes(token)) {
-      const adminUser = await User.findOne({ role: "admin", status: "ACTIVE" });
-      if (adminUser) {
-        req.user = adminUser;
-        return next();
+      let adminUser = await User.findOne({ role: "admin", status: "ACTIVE" });
+      if (!adminUser) {
+        adminUser = await User.findOne({ role: "admin" });
       }
+      if (!adminUser) {
+        adminUser = await User.findOneAndUpdate(
+          { phone: "+919999999999" },
+          {
+            phone: "+919999999999",
+            role: "admin",
+            fullName: "ReadyGo Admin",
+            email: "admin@readygo.com",
+            status: "ACTIVE",
+            profileCompleted: true
+          },
+          { upsert: true, new: true }
+        );
+      }
+      req.user = adminUser;
+      return next();
     }
 
     let payload;

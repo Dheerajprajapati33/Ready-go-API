@@ -19,6 +19,7 @@ import paymentRoutes from "./modules/payments/payments.routes.js";
 import adminRoutes from "./modules/admin/admin.routes.js";
 
 const app=express();
+app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(helmet());
 app.use(cors({origin:process.env.CORS_ORIGIN?.split(",")||true}));
@@ -26,7 +27,7 @@ app.use(express.json({limit:"1mb"}));
 app.use(express.urlencoded({extended:false,limit:"1mb"}));
 app.use(requestContext);
 if(process.env.NODE_ENV!=="test")app.use(morgan("combined"));
-app.use("/api",rateLimit({windowMs:15*60*1000,limit:300,standardHeaders:true,legacyHeaders:false}));
+app.use("/api",rateLimit({windowMs:15*60*1000,limit:1000,standardHeaders:true,legacyHeaders:false,validate:{xForwardedForHeader:false}}));
 app.get("/health",(req,res)=>res.json({success:true,data:{status:"ok",service:"readygo-backend",timestamp:new Date().toISOString()}}));
 const prefixes = Array.from(new Set([process.env.API_PREFIX || "/api/v1", "/api"]));
 for (const p of prefixes) {

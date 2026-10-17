@@ -9,6 +9,8 @@ import Ride from "../../models/Ride.js";
 import AuditLog from "../../models/AuditLog.js";
 import Promo from "../../models/Promo.js";
 import DriverDocument from "../../models/DriverDocument.js";
+import FareRule from "../../models/FareRule.js";
+import SafetyEvent from "../../models/SafetyEvent.js";
 import { handlePaymentReconciliation } from "../payments/payments.routes.js";
 const router=Router();
 router.get("/admin/driver-applications", requireAuth, allowRoles("admin", "safety", "finance"), asyncHandler(async (req, res) => {
@@ -75,19 +77,10 @@ router.get("/admin/driver-applications", requireAuth, allowRoles("admin", "safet
     DriverProfile.countDocuments(filter)
   ]);
 
-  // Graceful fallback: if strict filter returns 0, return all driver profiles so Postman test gets data
-  if (profiles.length === 0) {
-    profiles = await DriverProfile.find()
-      .populate("userId", "fullName phone email role")
-      .sort({ createdAt: -1 })
-      .limit(limitNum)
-      .lean();
-  }
-
   const formattedItems = profiles.map(p => {
     const rawUserId = (p.userId && typeof p.userId === "object" && p.userId._id)
       ? p.userId._id
-      : (p.userId || "6ad1ddf096e870cccabdd793");
+      : p.userId;
     const driverUser = (p.userId && typeof p.userId === "object" && p.userId._id) ? p.userId : null;
     return {
       id: p._id,
@@ -95,11 +88,11 @@ router.get("/admin/driver-applications", requireAuth, allowRoles("admin", "safet
       applicationId: p._id,
       userId: rawUserId,
       driverId: rawUserId,
-      driverName: driverUser?.fullName || "Amit Kumar",
-      phone: driverUser?.phone || "+919811223344",
-      email: driverUser?.email || "amit.driver@readygo.com",
-      city: p.city || city || "Noida",
-      vehicleCategory: p.vehicleCategory || p.vehicle?.category || (cat ? cat.toUpperCase() : "BIKE"),
+      driverName: driverUser?.fullName || driverUser?.phone || "Driver Partner",
+      phone: driverUser?.phone || "N/A",
+      email: driverUser?.email || "N/A",
+      city: p.city || "Not Specified",
+      vehicleCategory: p.vehicleCategory || p.vehicle?.category || "moto",
       vehicle: p.vehicle || {},
       applicationStatus: p.applicationStatus,
       status: p.applicationStatus,
@@ -248,43 +241,13 @@ router.get("/admin/audit-logs", requireAuth, allowRoles("admin", "safety", "fina
     AuditLog.countDocuments(filter)
   ]);
 
-  let items = logs;
-  let total = totalCount;
-
-  // Provide initial contextual audit records if collection has no entries yet for this query
-  if (items.length === 0) {
-    items = [
-      {
-        id: "audit_log_001",
-        _id: "audit_log_001",
-        actorId: req.user._id,
-        actorName: req.user.fullName || "Admin Operator",
-        actorRole: req.user.role || "admin",
-        action: action || "DRIVER_APPLICATION-REVIEW",
-        resourceType: resourceType || "DRIVER_APPLICATION",
-        resourceId: "app_pilot_doc_9918",
-        status: "SUCCESS",
-        details: {
-          previousStatus: "UNDER_REVIEW",
-          newStatus: "APPROVED",
-          comments: "KYC and background verification check passed."
-        },
-        ipAddress: "127.0.0.1",
-        userAgent: req.get("User-Agent") || "PostmanRuntime/7.39.1",
-        createdAt: new Date("2026-10-15T10:45:00.000Z"),
-        updatedAt: new Date("2026-10-15T10:45:00.000Z")
-      }
-    ];
-    total = 1;
-  }
-
   return ok(res, {
-    items,
+    items: logs,
     pagination: {
       page: pageNum,
       limit: limitNum,
-      total,
-      totalPages: Math.ceil(total / limitNum) || 1
+      total: totalCount,
+      totalPages: Math.ceil(totalCount / limitNum) || 1
     }
   }, "Audit logs retrieved successfully");
 }));
@@ -590,4 +553,51 @@ router.get("/admin/documents", requireAuth, allowRoles("admin", "safety"), async
   return ok(res, docs, "Driver documents retrieved");
 }));
 
+// Real-time Database Dashboard Metrics (Zero static data)
+router.get("/admin/dashboard/stats", requireAuth, allowRoles("admin", "safety", "finance"), asyncHandler(async (req, res) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [
+    activeRides,
+    onlineDrivers,
+    pendingKYC,
+    activeSOS,
+    todayCompletedRides
+  ] = await Promise.all([
+    Ride.countDocuments({ status: { $in: ["SEARCHING_DRIVER", "DRIVER_ASSIGNED", "DRIVER_ARRIVED", "IN_PROGRESS"] } }),
+    DriverProfile.countDocuments({ availability: "ONLINE" }),
+    DriverProfile.countDocuments({ applicationStatus: { $in: ["SUBMITTED", "UNDER_REVIEW", "DOCUMENTS_PENDING", "PENDING"] } }),
+    SafetyEvent.countDocuments({ status: { $ne: "RESOLVED" } }),
+    Ride.find({ status: "COMPLETED", completedAt: { $gte: today } }).select("fareBreakdown")
+  ]);
+
+  const todayRevenuePaise = todayCompletedRides.reduce((sum, r) => sum + (r.fareBreakdown?.totalPaise || 0), 0);
+
+  return ok(res, {
+    activeRides,
+    onlineDrivers,
+    pendingKYC,
+    activeSOS,
+    todayRevenuePaise,
+    todayRevenueFormatted: `₹${(todayRevenuePaise / 100).toLocaleString("en-IN")}`
+  }, "Dashboard metrics retrieved successfully");
+}));
+
+// Dynamic Fare Rules from MongoDB
+router.get("/admin/fare-rules", requireAuth, allowRoles("admin"), asyncHandler(async (req, res) => {
+  let rules = await FareRule.find().sort({ createdAt: 1 }).lean();
+  if (rules.length === 0) {
+    const defaults = [
+      { categoryId: "moto", name: "Moto", baseFarePaise: 3000, perKmPaise: 1200, minimumFarePaise: 3000 },
+      { categoryId: "auto", name: "Auto", baseFarePaise: 4000, perKmPaise: 1500, minimumFarePaise: 4000 },
+      { categoryId: "mini", name: "Cab Mini", baseFarePaise: 6000, perKmPaise: 1800, minimumFarePaise: 8000 },
+      { categoryId: "prime", name: "Cab Prime", baseFarePaise: 8000, perKmPaise: 2200, minimumFarePaise: 11000 }
+    ];
+    rules = await FareRule.insertMany(defaults);
+  }
+  return ok(res, rules, "Fare rules retrieved successfully");
+}));
+
 export default router;
+
