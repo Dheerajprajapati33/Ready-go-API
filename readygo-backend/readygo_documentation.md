@@ -715,7 +715,7 @@ RiderPage(User)
 
 # 🚗 PART 2: DriverPage
 
-Driver module me 5 core sub-folders hain:
+Driver module me 6 core sub-folders hain:
 
 ```
 DriverPage
@@ -723,7 +723,8 @@ DriverPage
 ├── 2. driverbooking & lifecycle (Offers, Accept, Reject, Arrived, Start, Complete, Tracking)
 ├── 3. Rating & Review (Ratings Summary, Reviews List, Single Rating, Report Review)
 ├── 4. DriverPerformancestatus (Performance Score, Trends, Shifts, Score Breakdown)
-└── 5. driverdashboard & earning (Dashboard Summary, Daily/Weekly/Monthly Earnings, Breakdown, Trips, Incentives)
+├── 5. driverdashboard & earning (Dashboard Summary, Daily/Weekly/Monthly Earnings, Breakdown, Trips, Incentives)
+└── 6. driver wallet & payouts (Wallet Balance, Ledger Transactions, Saved UPI/Bank Accounts, Verification, Withdrawals)
 ```
 
 ---
@@ -1250,6 +1251,238 @@ DriverPage
   "message": "Incentive details retrieved successfully"
 }
 ```
+
+---
+
+## 🟢 6. `driver wallet & payouts` (Driver Wallet, Ledger & Withdrawals)
+
+> 📌 **Workflow Steps:**  
+> **Start:** Check Balance ➡️ **Step 6.1:** `GET /driver/wallet` ➡️ **Step 6.2:** `GET /driver/wallet/transactions` ➡️ **Step 6.3:** `GET /driver/payout-accounts` ➡️ **Step 6.4:** `POST /driver/payout-accounts/upi` (Auto-saves `{{destinationId}}`) ➡️ **Step 6.5:** `POST /driver/payout-accounts/bank` ➡️ **Step 6.6:** `POST /driver/payout-accounts/:id/verify` ➡️ **Step 6.7:** `POST /driver/payouts` (Auto-saves `{{payoutId}}`) ➡️ **Step 6.8:** `GET /driver/payouts` ➡️ **End:** `GET /driver/payouts/:id`
+
+---
+
+### 6.1 `GET /driver/wallet` — [STEP 6.1: WORK START - DRIVER WALLET BALANCE]
+- **Purpose:** Driver ka available balance, currency aur last credited transaction detail fetch karta hai.
+- **URL:** `GET {{baseUrl}}/driver/wallet`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "currency": "INR",
+    "availableBalancePaise": 483250,
+    "availableBalance": 4832.5,
+    "lastCredited": {
+      "amountPaise": 30650,
+      "type": "TRIP_PAYOUT",
+      "createdAt": "2026-10-20T06:01:00.000Z"
+    }
+  },
+  "message": "Driver wallet retrieved successfully"
+}
+```
+
+---
+
+### 6.2 `GET /driver/wallet/transactions` — [STEP 6.2: WALLET TRANSACTIONS LEDGER]
+- **Purpose:** Append-only ledger transactions (Trip payouts, surge bonuses, incentives aur withdrawals) fetch karta hai.
+- **URL:** `GET {{baseUrl}}/driver/wallet/transactions?page=1&limit=10`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "671401f8...",
+        "type": "CREDIT",
+        "category": "TRIP_PAYOUT",
+        "description": "Trip payout",
+        "referenceId": "ride_101",
+        "amountPaise": 30650,
+        "amount": 306.5,
+        "balanceAfterPaise": 483250,
+        "currency": "INR",
+        "createdAt": "2026-10-20T06:01:00.000Z"
+      },
+      {
+        "id": "671401f9...",
+        "type": "CREDIT",
+        "category": "SURGE_BONUS",
+        "description": "Peak hour surge",
+        "amountPaise": 4500,
+        "amount": 45,
+        "balanceAfterPaise": 452600,
+        "currency": "INR",
+        "createdAt": "2026-10-20T04:00:00.000Z"
+      },
+      {
+        "id": "671401fa...",
+        "type": "DEBIT",
+        "category": "BANK_TRANSFER",
+        "description": "IMPS bank transfer",
+        "amountPaise": 200000,
+        "amount": 2000,
+        "balanceAfterPaise": 448100,
+        "currency": "INR",
+        "createdAt": "2026-10-19T12:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 3,
+      "totalPages": 1
+    }
+  },
+  "message": "Wallet transactions retrieved successfully"
+}
+```
+
+---
+
+### 6.3 `GET /driver/payout-accounts` — [STEP 6.3: LIST SAVED DESTINATIONS]
+- **Purpose:** Saved UPI aur Bank accounts return karta hai with sensitive data masked (`********8231`, `dr***@okaxis`).
+- **URL:** `GET {{baseUrl}}/driver/payout-accounts`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 6.4 `POST /driver/payout-accounts/upi` — [STEP 6.4: SAVE UPI DESTINATION]
+- **Purpose:** Driver ka UPI VPA ID save karta hai.
+- **URL:** `POST {{baseUrl}}/driver/payout-accounts/upi`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Request Body:**
+```json
+{
+  "upiId": "driver@okaxis",
+  "accountType": "UPI"
+}
+```
+- **Response (201 Created):**
+```json
+{
+  "success": true,
+  "message": "UPI destination saved; verification required",
+  "data": {
+    "destinationId": "671402a1...",
+    "id": "671402a1...",
+    "type": "UPI",
+    "maskedUpiId": "dr***@okaxis",
+    "verificationStatus": "PENDING",
+    "isDefault": false
+  }
+}
+```
+*(Test script automatically saves `destinationId`).*
+
+---
+
+### 6.5 `POST /driver/payout-accounts/bank` — [STEP 6.5: SAVE BANK ACCOUNT]
+- **Purpose:** Account holder name, account number aur IFSC save karta hai.
+- **URL:** `POST {{baseUrl}}/driver/payout-accounts/bank`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Request Body:**
+```json
+{
+  "accountHolderName": "Rajesh Kumar",
+  "accountNumber": "50100234918231",
+  "ifscCode": "HDFC0001234",
+  "accountType": "BANK"
+}
+```
+- **Response (201 Created):**
+```json
+{
+  "success": true,
+  "message": "Bank destination saved; verification required",
+  "data": {
+    "destinationId": "671402b5...",
+    "id": "671402b5...",
+    "type": "BANK",
+    "accountHolderName": "Rajesh Kumar",
+    "maskedAccountNumber": "********8231",
+    "ifscCode": "HDFC0001234",
+    "verificationStatus": "PENDING",
+    "isDefault": false
+  }
+}
+```
+
+---
+
+### 6.6 `POST /driver/payout-accounts/:destinationId/verify` — [STEP 6.6: VERIFY DESTINATION]
+- **Purpose:** Payout destination ko verify karta hai (`PENDING` ➔ `VERIFIED`).
+- **URL:** `POST {{baseUrl}}/driver/payout-accounts/{{destinationId}}/verify`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Request Body:**
+```json
+{
+  "verificationMethod": "PROVIDER"
+}
+```
+- **Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "destinationId": "671402b5...",
+    "id": "671402b5...",
+    "verificationStatus": "VERIFIED",
+    "verificationReference": "verify_1729428123456"
+  },
+  "message": "Payout destination verified successfully"
+}
+```
+
+---
+
+### 6.7 `POST /driver/payouts` — [STEP 6.7: REQUEST WITHDRAWAL]
+- **Purpose:** Verified account me atomic balance deduction ke sath payout request create karta hai.
+- **URL:** `POST {{baseUrl}}/driver/payouts`
+- **Headers:**  
+  `Authorization: Bearer {{driverToken}}`  
+  `Idempotency-Key: payout_req_123456`
+- **Request Body:**
+```json
+{
+  "amountPaise": 200000,
+  "destinationId": "{{destinationId}}",
+  "mode": "INSTANT"
+}
+```
+- **Response (201 Created):**
+```json
+{
+  "success": true,
+  "data": {
+    "payoutId": "671403c9...",
+    "id": "671403c9...",
+    "amountPaise": 200000,
+    "currency": "INR",
+    "mode": "INSTANT",
+    "status": "REQUESTED"
+  },
+  "message": "Payout requested successfully"
+}
+```
+*(Test script automatically saves `payoutId`).*
+
+---
+
+### 6.8 `GET /driver/payouts` — [STEP 6.8: LIST DRIVER PAYOUTS]
+- **Purpose:** Driver ki sabhi payout requests aur unka status fetch karta hai.
+- **URL:** `GET {{baseUrl}}/driver/payouts?page=1&limit=10`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 6.9 `GET /driver/payouts/:payoutId` — [STEP 6.9: GET SINGLE PAYOUT STATUS - WORK END]
+- **Purpose:** Kisi single withdrawal request ka live status (`REQUESTED`, `PROCESSING`, `PAID`) check karta hai.
+- **URL:** `GET {{baseUrl}}/driver/payouts/{{payoutId}}`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
 
 ---
 
