@@ -720,11 +720,15 @@ Driver module me 6 core sub-folders hain:
 ```
 DriverPage
 ├── 1. auth (Driver Login, Profile, Online/Offline Availability, Location Ping)
-├── 2. driverbooking & lifecycle (Offers, Accept, Reject, Arrived, Start, Complete, Tracking)
-├── 3. Rating & Review (Ratings Summary, Reviews List, Single Rating, Report Review)
-├── 4. DriverPerformancestatus (Performance Score, Trends, Shifts, Score Breakdown)
-├── 5. driverdashboard & earning (Dashboard Summary, Daily/Weekly/Monthly Earnings, Breakdown, Trips, Incentives)
-└── 6. driver wallet & payouts (Wallet Balance, Ledger Transactions, Saved UPI/Bank Accounts, Verification, Withdrawals)
+├── 2. driver document upload (Driving License, Vehicle RC, Insurance)
+├── 3. driverbooking & lifecycle (Offers, Accept, Reject, Arrived, Start, Complete, Tracking)
+├── 4. Rating & Review (Ratings Summary, Reviews List, Single Rating, Report Review)
+├── 5. DriverPerformancestatus (Performance Score, Trends, Shifts, Score Breakdown)
+├── 6. driverdashboard & earning (Dashboard Summary, Daily/Weekly/Monthly Earnings, Breakdown, Trips, Incentives)
+├── 7. driver wallet & payouts (Wallet Balance, Ledger Transactions, Saved UPI/Bank Accounts, Verification, Withdrawals)
+├── 8. Help & Support (Overview, Search Topics, Tickets, Messages, Live Chat, Close Ticket)
+├── 9. Refer-a-Driver (Summary, List Referred Drivers, Validate Code, Progress, Rewards, Share Link, Dispute, Admin Review)
+└── 10. Driver Notifications & Devices (Notifications List, Unread Badge, Mark Read, Read All, Dismiss, FCM Device Register)
 ```
 
 ---
@@ -1485,6 +1489,438 @@ DriverPage
 - **Headers:** `Authorization: Bearer {{driverToken}}`
 
 ---
+
+---
+
+## 🛟 8. `Help & Support` (Driver Support, Help Topics & Live Chat)
+
+> 📌 **Workflow Steps:**  
+> **Start:** Need Support ➡️ **Step 8.1:** `GET /driver/support/overview` ➡️ **Step 8.2:** `GET /driver/support/topics` (Search FAQ articles) ➡️ **Step 8.3:** `GET /driver/support/topics/:topicId` ➡️ **Step 8.4:** `POST /driver/support/tickets` (Auto-saves `{{ticketId}}`) ➡️ **Step 8.5:** `GET /driver/support/tickets` ➡️ **Step 8.6:** `GET /driver/support/tickets/:ticketId` ➡️ **Step 8.7:** `POST /driver/support/tickets/:ticketId/messages` ➡️ **Step 8.8:** `POST /driver/support/live-chat/sessions` (Auto-saves `{{liveChatSessionId}}`) ➡️ **Step 8.9:** `GET /driver/support/live-chat/sessions/:sessionId` ➡️ **End:** `PATCH /driver/support/tickets/:ticketId/close`
+
+---
+
+### 8.1 `GET /driver/support/overview` — [SUPPORT OVERVIEW & AGENT STATUS]
+- **Purpose:** Live agent status, average wait time, support phone number aur support categories return karta hai.
+- **URL:** `GET {{baseUrl}}/driver/support/overview`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Support overview retrieved successfully",
+  "data": {
+    "liveAgent": {
+      "available": true,
+      "queueStatus": "AVAILABLE",
+      "averageWaitSeconds": 45
+    },
+    "supportPhone": "1800-READYGO",
+    "categories": [
+      { "code": "RIDE_ISSUES", "label": "Ride Issues" },
+      { "code": "PAYMENTS_PAYOUTS", "label": "Payments & Payouts" },
+      { "code": "ACCOUNT_KYC", "label": "Account & KYC" },
+      { "code": "RATINGS_REVIEWS", "label": "Ratings & Reviews" },
+      { "code": "SAFETY_INCIDENTS", "label": "Safety & Incidents" },
+      { "code": "INCENTIVES_BONUSES", "label": "Incentives & Bonuses" }
+    ]
+  }
+}
+```
+
+---
+
+### 8.2 `GET /driver/support/topics` — [SEARCH HELP TOPICS & FAQS]
+- **Purpose:** Published help topics ko query keywords (`q`) aur category ke zariye search karta hai.
+- **URL:** `GET {{baseUrl}}/driver/support/topics?q=payout&category=PAYMENTS_PAYOUTS&page=1&limit=10`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Help topics retrieved",
+  "data": {
+    "items": [
+      {
+        "topicId": "topic_pay_01",
+        "title": "How and when are trip earnings paid out?",
+        "category": "PAYMENTS_PAYOUTS",
+        "content": "Trip payouts are credited automatically to your ReadyGo Driver Wallet...",
+        "tags": ["payout", "earnings", "wallet", "instant withdrawal"],
+        "views": 42
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 6,
+      "pages": 1
+    }
+  }
+}
+```
+
+---
+
+### 8.3 `GET /driver/support/topics/:topicId` — [GET SINGLE HELP ARTICLE]
+- **Purpose:** Ek specific help topic ka pura content fetch karta hai aur views increment karta hai.
+- **URL:** `GET {{baseUrl}}/driver/support/topics/topic_pay_01`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 8.4 `POST /driver/support/tickets` — [CREATE SUPPORT TICKET]
+- **Purpose:** Driver issue report karne ke liye naya support ticket generate karta hai.
+- **URL:** `POST {{baseUrl}}/driver/support/tickets`
+- **Headers:** `Authorization: Bearer {{driverToken}}`, `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "category": "PAYMENTS_PAYOUTS",
+  "subject": "Trip payout not received",
+  "description": "Payout for trip BLR-8823 is missing.",
+  "rideId": "ride_8823",
+  "priority": "NORMAL"
+}
+```
+- **Response (201 Created):**
+```json
+{
+  "success": true,
+  "message": "Support ticket created",
+  "data": {
+    "ticketId": "ticket_102934",
+    "status": "OPEN",
+    "category": "PAYMENTS_PAYOUTS",
+    "createdAt": "2026-10-20T10:30:00.000Z"
+  }
+}
+```
+*(Test script automatically saves `ticketId`).*
+
+---
+
+### 8.5 `GET /driver/support/tickets` — [LIST DRIVER'S TICKETS]
+- **Purpose:** Current driver ke create kiye hue sabhi tickets list karta hai with pagination.
+- **URL:** `GET {{baseUrl}}/driver/support/tickets?page=1&limit=10`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 8.6 `GET /driver/support/tickets/:ticketId` — [TICKET DETAILS & MESSAGE TIMELINE]
+- **Purpose:** Ticket ki complete history aur driver/agent ke beech exchange hue messages fetch karta hai.
+- **URL:** `GET {{baseUrl}}/driver/support/tickets/{{ticketId}}`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 8.7 `POST /driver/support/tickets/:ticketId/messages` — [SEND MESSAGE TO TICKET]
+- **Purpose:** Ongoing support ticket me driver ka naya message reply post karta hai.
+- **URL:** `POST {{baseUrl}}/driver/support/tickets/{{ticketId}}/messages`
+- **Headers:** `Authorization: Bearer {{driverToken}}`, `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "message": "Please check the missing payout."
+}
+```
+
+---
+
+### 8.8 `POST /driver/support/live-chat/sessions` — [REQUEST LIVE SUPPORT CHAT]
+- **Purpose:** Live human support agent ke sath chat session request initiate karta hai.
+- **URL:** `POST {{baseUrl}}/driver/support/live-chat/sessions`
+- **Headers:** `Authorization: Bearer {{driverToken}}`, `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "category": "PAYMENTS_PAYOUTS",
+  "initialMessage": "Need instant assistance with my payout."
+}
+```
+- **Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Live support chat session requested",
+  "data": {
+    "sessionId": "chat_8x29a1",
+    "status": "QUEUED",
+    "queuePosition": 1,
+    "estimatedWaitSeconds": 45,
+    "agent": {
+      "agentId": "agent_402",
+      "agentName": "Priya Sharma (ReadyGo Partner Support)",
+      "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150"
+    }
+  }
+}
+```
+*(Test script automatically saves `liveChatSessionId`).*
+
+---
+
+### 8.9 `GET /driver/support/live-chat/sessions/:sessionId` — [CHECK LIVE CHAT QUEUE STATUS]
+- **Purpose:** Live chat queue position aur agent connection status check karta hai.
+- **URL:** `GET {{baseUrl}}/driver/support/live-chat/sessions/{{liveChatSessionId}}`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 8.10 `PATCH /driver/support/tickets/:ticketId/close` — [CLOSE RESOLVED TICKET]
+- **Purpose:** Driver apne resolved ticket ko close mark karta hai with optional closing note.
+- **URL:** `PATCH {{baseUrl}}/driver/support/tickets/{{ticketId}}/close`
+- **Headers:** `Authorization: Bearer {{driverToken}}`, `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "closingNote": "Issue resolved with support agent."
+}
+```
+
+---
+
+## 👥 9. `Refer-a-Driver` (Driver Referral Program & Rewards)
+
+> 📌 **Workflow Steps:**  
+> **Start:** Driver Referrals Screen ➡️ **Step 9.1:** `GET /driver/referrals/summary` (Auto-saves `{{referralCode}}`) ➡️ **Step 9.2:** `GET /driver/referrals` (Auto-saves `{{referralId}}`) ➡️ **Step 9.3:** `POST /driver/referrals/validate` ➡️ **Step 9.4:** `GET /driver/referrals/:referralId` ➡️ **Step 9.5:** `GET /driver/referrals/rewards` ➡️ **Step 9.6:** `POST /driver/referrals/share-link` ➡️ **Step 9.7:** `PATCH /driver/referrals/:referralId/dispute` ➡️ **End:** `POST /admin/referrals/:referralId/review`
+
+---
+
+### 9.1 `GET /driver/referrals/summary` — [REFERRAL CODE, CONFIG & STATS]
+- **Purpose:** Referral code, ₹1,500 reward config, 20-ride qualification threshold, total referred drivers aur total earned amount return karta hai.
+- **URL:** `GET {{baseUrl}}/driver/referrals/summary`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Referral summary retrieved",
+  "data": {
+    "referralCode": "RAJESH-1850",
+    "rewardPerEligibleDriverPaise": 150000,
+    "qualificationRideCount": 20,
+    "referredDriverCount": 7,
+    "totalEarnedPaise": 850000,
+    "shareUrl": "https://readygo.example/r/RAJESH-1850"
+  }
+}
+```
+*(Test script automatically saves `referralCode`).*
+
+---
+
+### 9.2 `GET /driver/referrals` — [LIST REFERRED DRIVERS]
+- **Purpose:** Current driver ne jin naye driver partners ko invite kiya hai unki list with completed rides progress return karta hai.
+- **URL:** `GET {{baseUrl}}/driver/referrals?page=1&limit=10`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 9.3 `POST /driver/referrals/validate` — [VALIDATE CODE DURING REGISTRATION]
+- **Purpose:** Naye driver registration screen par referral code enter karne par code ki validity aur bonus eligibility verify karta hai.
+- **URL:** `POST {{baseUrl}}/driver/referrals/validate`
+- **Headers:** `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "referralCode": "{{referralCode}}"
+}
+```
+- **Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Referral code is valid",
+  "data": {
+    "valid": true,
+    "referralCode": "RAJESH-1850",
+    "referrerName": "Rajesh Kumar",
+    "rewardPerEligibleDriverPaise": 150000,
+    "qualificationRideCount": 20,
+    "message": "Earn ₹1500 after completing 20 trips!"
+  }
+}
+```
+
+---
+
+### 9.4 `GET /driver/referrals/:referralId` — [REFERRAL PROGRESS & QUALIFICATION]
+- **Purpose:** Kisi specific referred driver ka live ride completion progress (e.g. 12 of 20 rides completed) aur reward credit status return karta hai.
+- **URL:** `GET {{baseUrl}}/driver/referrals/{{referralId}}`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Referral progress retrieved",
+  "data": {
+    "referralId": "ref_123",
+    "referredDriver": {
+      "displayName": "A. Kumar"
+    },
+    "completedEligibleRides": 12,
+    "requiredEligibleRides": 20,
+    "rewardPerEligibleDriverPaise": 150000,
+    "referrerRewardStatus": "PENDING",
+    "referredDriverRewardStatus": "PENDING"
+  }
+}
+```
+
+---
+
+### 9.5 `GET /driver/referrals/rewards` — [REFERRAL REWARD HISTORY]
+- **Purpose:** Driver ko refer karke earn kiye gaye bonuses ka complete historical ledger return karta hai.
+- **URL:** `GET {{baseUrl}}/driver/referrals/rewards?page=1&limit=10`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 9.6 `POST /driver/referrals/share-link` — [GENERATE NATIVE SHARE LINK]
+- **Purpose:** WhatsApp, SMS ya social apps ke liye share message text aur invite URL generate karta hai.
+- **URL:** `POST {{baseUrl}}/driver/referrals/share-link`
+- **Headers:** `Authorization: Bearer {{driverToken}}`, `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "channel": "WHATSAPP"
+}
+```
+
+---
+
+### 9.7 `PATCH /driver/referrals/:referralId/dispute` — [SUBMIT REFERRAL DISPUTE]
+- **Purpose:** Agar kisi driver ne rides complete kar li hon par reward pending ho, toh driver reward dispute raise kar sakta hai.
+- **URL:** `PATCH {{baseUrl}}/driver/referrals/{{referralId}}/dispute`
+- **Headers:** `Authorization: Bearer {{driverToken}}`, `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "reason": "RIDES_COMPLETED_NOT_CREDITED",
+  "description": "Referred driver completed 20 rides yesterday but reward is still pending."
+}
+```
+
+---
+
+### 9.8 `POST /admin/referrals/:referralId/review` — [ADMIN REVIEW & WALLET CREDIT]
+- **Purpose:** Admin flagged dispute ya referral ko review karke approve karta hai. Approval par automatically Driver Wallet me ₹1,500 credit hota hai with ledger transaction entry.
+- **URL:** `POST {{baseUrl}}/admin/referrals/{{referralId}}/review`
+- **Headers:** `Authorization: Bearer dev_admin_token`, `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "decision": "APPROVED",
+  "reason": "Verified completed rides from audit log"
+}
+```
+
+---
+
+## 🔔 10. `Driver Notifications & Devices` (In-App Notifications & FCM)
+
+> 📌 **Workflow Steps:**  
+> **Start:** Notifications Icon ➡️ **Step 10.1:** `GET /driver/notifications` (Auto-saves `{{notificationId}}`) ➡️ **Step 10.2:** `GET /driver/notifications/unread-count` ➡️ **Step 10.3:** `GET /driver/notifications/:notificationId` ➡️ **Step 10.4:** `PATCH /driver/notifications/:notificationId/read` ➡️ **Step 10.5:** `POST /driver/notifications/read-all` ➡️ **Step 10.6:** `DELETE /driver/notifications/:notificationId` ➡️ **Step 10.7:** `POST /devices/register` (Auto-saves `{{deviceId}}`) ➡️ **End:** `DELETE /devices/:deviceId`
+
+---
+
+### 10.1 `GET /driver/notifications` — [LIST DRIVER NOTIFICATIONS]
+- **Purpose:** In-app notifications list karta hai newest first, deep link target screens ke sath.
+- **URL:** `GET {{baseUrl}}/driver/notifications?page=1&limit=20&unreadOnly=false`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+- **Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Driver notifications retrieved",
+  "data": {
+    "items": [
+      {
+        "id": "ntf_inc_101",
+        "type": "INCENTIVE_UNLOCKED",
+        "title": "Incentive Unlocked! 🚀",
+        "body": "You earned the Peak Hour Hero bonus: +₹200",
+        "isRead": false,
+        "createdAt": "2026-10-20T10:13:00.000Z",
+        "action": {
+          "screen": "DriverIncentiveDetails",
+          "params": {
+            "incentiveId": "inc_hero"
+          }
+        }
+      }
+    ],
+    "unreadCount": 3,
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 6,
+      "pages": 1
+    }
+  }
+}
+```
+*(Test script automatically saves `notificationId`).*
+
+---
+
+### 10.2 `GET /driver/notifications/unread-count` — [UNREAD BADGE COUNT]
+- **Purpose:** Driver app bell icon par dikhane ke liye unread notifications count return karta hai.
+- **URL:** `GET {{baseUrl}}/driver/notifications/unread-count`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 10.3 `GET /driver/notifications/:notificationId` — [SINGLE NOTIFICATION DETAIL]
+- **Purpose:** Kisi specific notification ka full payload aur action deep link screen data return karta hai.
+- **URL:** `GET {{baseUrl}}/driver/notifications/{{notificationId}}`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 10.4 `PATCH /driver/notifications/:notificationId/read` — [MARK NOTIFICATION AS READ]
+- **Purpose:** Driver jab notification par tap karta hai, toh backend me status `isRead: true` update hota hai.
+- **URL:** `PATCH {{baseUrl}}/driver/notifications/{{notificationId}}/read`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 10.5 `POST /driver/notifications/read-all` — [MARK ALL NOTIFICATIONS AS READ]
+- **Purpose:** Ek click me driver ke saari unread notifications ko read mark karta hai.
+- **URL:** `POST {{baseUrl}}/driver/notifications/read-all`
+- **Headers:** `Authorization: Bearer {{driverToken}}`, `Content-Type: application/json`
+- **Request Body:** `{}`
+
+---
+
+### 10.6 `DELETE /driver/notifications/:notificationId` — [DISMISS NOTIFICATION]
+- **Purpose:** Notification ko driver ki list se dismiss/delete karta hai.
+- **URL:** `DELETE {{baseUrl}}/driver/notifications/{{notificationId}}`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
+---
+
+### 10.7 `POST /devices/register` — [REGISTER FCM DEVICE TOKEN (SHARED API)]
+- **Purpose:** Firebase Cloud Messaging (FCM) ya APNs push token register karta hai.
+- **URL:** `POST {{baseUrl}}/devices/register`
+- **Headers:** `Authorization: Bearer {{driverToken}}`, `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "deviceId": "dev_driver_pixel_01",
+  "platform": "android",
+  "pushToken": "fcm_dummy_driver_token_mock_test_12345"
+}
+```
+*(Test script automatically saves `deviceId`).*
+
+---
+
+### 10.8 `DELETE /devices/:deviceId` — [UNREGISTER DEVICE TOKEN (SHARED API)]
+- **Purpose:** Logout hone ya app delete hone par device token unregister karta hai.
+- **URL:** `DELETE {{baseUrl}}/devices/{{deviceId}}`
+- **Headers:** `Authorization: Bearer {{driverToken}}`
+
 
 # ⚡ PART 3: Realtime Events (Socket.IO Setup in Postman)
 

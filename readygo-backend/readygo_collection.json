@@ -65,6 +65,36 @@
       "key": "paymentId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "ticketId",
+      "value": "ticket_123",
+      "type": "string"
+    },
+    {
+      "key": "liveChatSessionId",
+      "value": "chat_123",
+      "type": "string"
+    },
+    {
+      "key": "referralId",
+      "value": "ref_123",
+      "type": "string"
+    },
+    {
+      "key": "referralCode",
+      "value": "READY-1850",
+      "type": "string"
+    },
+    {
+      "key": "notificationId",
+      "value": "ntf_inc_101",
+      "type": "string"
+    },
+    {
+      "key": "deviceId",
+      "value": "dev_driver_pixel_01",
+      "type": "string"
     }
   ],
   "item": [
@@ -3348,6 +3378,1160 @@
                 },
                 "description": "⏹️ **[STEP 6.9: GET SINGLE PAYOUT STATUS - WORK END]**\n- **Purpose:** Kisi specific withdrawal request ka live processing status check karta hai."
               }
+            }
+          ]
+        },
+        {
+          "name": "8. Help & Support",
+          "description": "Section 25.1 Help & Support: Live Agent status, help topic articles search, ticket creation, message timeline, live chat sessions, and ticket closing.",
+          "item": [
+            {
+              "name": "8.1 Support Overview",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/support/overview",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "support",
+                    "overview"
+                  ]
+                },
+                "description": "Fetch live agent availability, average wait time, support phone, and support category codes."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Support Overview Retrieved\", function() { pm.response.to.have.status(200); });",
+                      "var res = pm.response.json();",
+                      "pm.test(\"Has categories and liveAgent\", function() { pm.expect(res.data.categories).to.be.an('array'); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "8.2 Search Help Topics",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/support/topics?q=payout&category=PAYMENTS_PAYOUTS&page=1&limit=10",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "support",
+                    "topics"
+                  ],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "payout"
+                    },
+                    {
+                      "key": "category",
+                      "value": "PAYMENTS_PAYOUTS"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "Search published driver help topics by keyword query and category."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Help Topics Retrieved\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "8.3 Get Single Help Article",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/support/topics/topic_pay_01",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "support",
+                    "topics",
+                    "topic_pay_01"
+                  ]
+                },
+                "description": "Get full article content and view counts for one published help topic."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Topic Retrieved\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "8.4 Create Support Ticket",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"category\": \"PAYMENTS_PAYOUTS\",\n  \"subject\": \"Trip payout not received\",\n  \"description\": \"Payout for trip BLR-8823 is missing.\",\n  \"rideId\": \"ride_8823\",\n  \"priority\": \"NORMAL\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/driver/support/tickets",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "support",
+                    "tickets"
+                  ]
+                },
+                "description": "Create a new support ticket with category, subject, description, and optional rideId."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 201 or 200 - Support Ticket Created\", function() { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                      "var res = pm.response.json();",
+                      "if (res.data && res.data.ticketId) {",
+                      "  pm.collectionVariables.set(\"ticketId\", res.data.ticketId);",
+                      "  console.log(\"Saved ticketId:\", res.data.ticketId);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "8.5 List Driver Tickets",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/support/tickets?page=1&limit=10",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "support",
+                    "tickets"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "List all support tickets created by current driver."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Tickets Listed\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "8.6 Get Ticket Details & Timeline",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/support/tickets/{{ticketId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "support",
+                    "tickets",
+                    "{{ticketId}}"
+                  ]
+                },
+                "description": "Get single ticket details including timeline of back-and-forth messages."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Ticket Details Retrieved\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "8.7 Send Message to Support Ticket",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"message\": \"Please check the missing payout.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/driver/support/tickets/{{ticketId}}/messages",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "support",
+                    "tickets",
+                    "{{ticketId}}",
+                    "messages"
+                  ]
+                },
+                "description": "Driver sends a new reply message in the ticket timeline."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Message Sent\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "8.8 Request Live Chat Session",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"category\": \"PAYMENTS_PAYOUTS\",\n  \"initialMessage\": \"Need instant assistance with my weekly incentive payout.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/driver/support/live-chat/sessions",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "support",
+                    "live-chat",
+                    "sessions"
+                  ]
+                },
+                "description": "Initiate live support chat request."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Chat Requested\", function() { pm.response.to.have.status(200); });",
+                      "var res = pm.response.json();",
+                      "if (res.data && res.data.sessionId) {",
+                      "  pm.collectionVariables.set(\"liveChatSessionId\", res.data.sessionId);",
+                      "  console.log(\"Saved liveChatSessionId:\", res.data.sessionId);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "8.9 Get Live Chat Session Status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/support/live-chat/sessions/{{liveChatSessionId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "support",
+                    "live-chat",
+                    "sessions",
+                    "{{liveChatSessionId}}"
+                  ]
+                },
+                "description": "Poll queue position, estimated wait time, or connected support agent."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Chat Status Retrieved\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "8.10 Close Resolved Ticket",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"closingNote\": \"Driver resolved issue with support agent.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/driver/support/tickets/{{ticketId}}/close",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "support",
+                    "tickets",
+                    "{{ticketId}}",
+                    "close"
+                  ]
+                },
+                "description": "Driver marks the ticket status as CLOSED."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Ticket Closed\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "9. Refer-a-Driver",
+          "description": "Section 25.2 Refer-a-Driver: Driver referral code, summary, referred drivers progress, reward history, share link, disputes, and admin review.",
+          "item": [
+            {
+              "name": "9.1 Referral Summary",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/referrals/summary",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "referrals",
+                    "summary"
+                  ]
+                },
+                "description": "Get referral code, ₹1,500 reward config, 20-ride threshold, count of referred drivers and total earned."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Referral Summary Retrieved\", function() { pm.response.to.have.status(200); });",
+                      "var res = pm.response.json();",
+                      "if (res.data && res.data.referralCode) {",
+                      "  pm.collectionVariables.set(\"referralCode\", res.data.referralCode);",
+                      "  console.log(\"Saved referralCode:\", res.data.referralCode);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "9.2 List Referred Drivers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/referrals?page=1&limit=10",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "referrals"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "List drivers referred by current driver with ride completion progress."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Referred Drivers Listed\", function() { pm.response.to.have.status(200); });",
+                      "var res = pm.response.json();",
+                      "if (res.data && res.data.items && res.data.items.length > 0) {",
+                      "  pm.collectionVariables.set(\"referralId\", res.data.items[0].referralId);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "9.3 Validate Referral Code",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"referralCode\": \"{{referralCode}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/driver/referrals/validate",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "referrals",
+                    "validate"
+                  ]
+                },
+                "description": "Validate a referral code during driver registration."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Referral Code Valid\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "9.4 Referral Progress & Qualification",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/referrals/{{referralId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "referrals",
+                    "{{referralId}}"
+                  ]
+                },
+                "description": "Get specific referral ride progress (e.g. 12 of 20 completed rides) and qualification status."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Referral Progress Retrieved\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "9.5 Referral Rewards History",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/referrals/rewards?page=1&limit=10",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "referrals",
+                    "rewards"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                },
+                "description": "List credited referral rewards history."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Referral Rewards History Retrieved\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "9.6 Generate Share Link",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"channel\": \"WHATSAPP\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/driver/referrals/share-link",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "referrals",
+                    "share-link"
+                  ]
+                },
+                "description": "Create share text and link for WhatsApp, SMS, or native share sheet."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Share Link Generated\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "9.7 Submit Referral Dispute",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"RIDES_COMPLETED_NOT_CREDITED\",\n  \"description\": \"Referred driver completed 20 rides yesterday but reward is still pending.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/driver/referrals/{{referralId}}/dispute",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "referrals",
+                    "{{referralId}}",
+                    "dispute"
+                  ]
+                },
+                "description": "Submit a dispute if referral bonus was not credited."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Dispute Submitted\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "9.8 Admin Review Referral",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer dev_admin_token"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"decision\": \"APPROVED\",\n  \"reason\": \"Verified completed rides from audit log\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/admin/referrals/{{referralId}}/review",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "referrals",
+                    "{{referralId}}",
+                    "review"
+                  ]
+                },
+                "description": "Admin reviews referral dispute and approves reward into Driver Wallet."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Referral Reviewed\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "10. Driver Notifications & Devices",
+          "description": "Section 25.3 Driver Notifications: In-app notifications list, unread badge count, mark as read, mark all read, dismiss, and FCM device registration.",
+          "item": [
+            {
+              "name": "10.1 List Notifications",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/notifications?page=1&limit=20&unreadOnly=false",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "notifications"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "unreadOnly",
+                      "value": "false"
+                    }
+                  ]
+                },
+                "description": "List notifications, newest first, with badge count and action targets."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Notifications Listed\", function() { pm.response.to.have.status(200); });",
+                      "var res = pm.response.json();",
+                      "if (res.data && res.data.items && res.data.items.length > 0) {",
+                      "  pm.collectionVariables.set(\"notificationId\", res.data.items[0].id);",
+                      "  console.log(\"Saved notificationId:\", res.data.items[0].id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.2 Get Unread Badge Count",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/notifications/unread-count",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "notifications",
+                    "unread-count"
+                  ]
+                },
+                "description": "Get badge count of unread driver notifications."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Unread Count Retrieved\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.3 Get Notification Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/notifications/{{notificationId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "notifications",
+                    "{{notificationId}}"
+                  ]
+                },
+                "description": "Get single notification details."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Notification Details Retrieved\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.4 Mark Notification as Read",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/notifications/{{notificationId}}/read",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "notifications",
+                    "{{notificationId}}",
+                    "read"
+                  ]
+                },
+                "description": "Mark one notification as read."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Notification Marked as Read\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.5 Mark All Notifications as Read",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/driver/notifications/read-all",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "notifications",
+                    "read-all"
+                  ]
+                },
+                "description": "Mark all current driver's notifications as read."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - All Notifications Marked Read\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.6 Dismiss Notification",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/driver/notifications/{{notificationId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "driver",
+                    "notifications",
+                    "{{notificationId}}"
+                  ]
+                },
+                "description": "Dismiss notification from driver's view."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Notification Dismissed\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.7 Register FCM Device Token",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"deviceId\": \"dev_driver_pixel_01\",\n  \"platform\": \"android\",\n  \"pushToken\": \"fcm_dummy_driver_token_mock_test_12345\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/devices/register",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "devices",
+                    "register"
+                  ]
+                },
+                "description": "Register FCM/APNs push notification device token."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 or 201 - Device Registered\", function() { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                      "var res = pm.response.json();",
+                      "if (res.data && res.data.deviceId) {",
+                      "  pm.collectionVariables.set(\"deviceId\", res.data.deviceId);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "10.8 Unregister Device Token",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{driverToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/devices/{{deviceId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "devices",
+                    "{{deviceId}}"
+                  ]
+                },
+                "description": "Unregister FCM/APNs device token on logout or app uninstall."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status 200 - Device Unregistered\", function() { pm.response.to.have.status(200); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
             }
           ]
         }

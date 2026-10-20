@@ -23,7 +23,8 @@ const WalletTransactionSchema = new mongoose.Schema({
       "WITHDRAWAL",
       "REVERSAL",
       "PLATFORM_FEE",
-      "ADJUSTMENT"
+      "ADJUSTMENT",
+      "REFERRAL_BONUS"
     ],
     required: true,
   },

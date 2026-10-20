@@ -18,6 +18,9 @@ import safetyRoutes from "./modules/safety/safety.routes.js";
 import paymentRoutes from "./modules/payments/payments.routes.js";
 import adminRoutes from "./modules/admin/admin.routes.js";
 import driverWalletRoutes from "./modules/driver/driverWallet.routes.js";
+import driverSupportRoutes from "./modules/driver/driverSupport.routes.js";
+import driverReferralRoutes from "./modules/driver/driverReferral.routes.js";
+import driverNotificationRoutes from "./modules/driver/driverNotification.routes.js";
 
 const app=express();
 app.set("trust proxy", 1);
@@ -46,6 +49,9 @@ for (const p of prefixes) {
   app.use(`${p}`, paymentRoutes);
   app.use(`${p}`, adminRoutes);
   app.use(`${p}`, driverWalletRoutes);
+  app.use(`${p}`, driverSupportRoutes);
+  app.use(`${p}`, driverReferralRoutes);
+  app.use(`${p}`, driverNotificationRoutes);
 }
 app.use(notFound);
 app.use(errorHandler);

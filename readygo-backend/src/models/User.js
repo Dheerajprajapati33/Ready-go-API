@@ -6,6 +6,7 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, lowercase: true, trim: true },
   avatarUrl: String,
   referralCode: String,
+  referredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   preferences: {
     whatsAppUpdatesEnabled: { type: Boolean, default: false },
     ridePushEnabled: { type: Boolean, default: true }
