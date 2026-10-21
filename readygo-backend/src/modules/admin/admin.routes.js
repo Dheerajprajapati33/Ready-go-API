@@ -12,6 +12,7 @@ import DriverDocument from "../../models/DriverDocument.js";
 import FareRule from "../../models/FareRule.js";
 import SafetyEvent from "../../models/SafetyEvent.js";
 import { handlePaymentReconciliation } from "../payments/payments.routes.js";
+import { emitRideStatus, emitDriverAssigned } from "../../services/socketService.js";
 const router=Router();
 router.get("/admin/driver-applications", requireAuth, allowRoles("admin", "safety", "finance"), asyncHandler(async (req, res) => {
   const {
@@ -265,18 +266,57 @@ router.get("/admin/rides",requireAuth,allowRoles("admin"),asyncHandler(async(req
 }));
 router.post("/admin/rides/:id/assign", requireAuth, allowRoles("admin"), asyncHandler(async (req, res) => {
   const rideId = req.params.id;
-  const driverId = req.body.driverId || req.body.driverProfileId || req.body.userId || "6accc2d28292d50951101b01";
+  const inputDriverId = req.body.driverId || req.body.driverProfileId || req.body.userId;
 
   let driverUser = null;
-  if (mongoose.isValidObjectId(driverId)) {
-    driverUser = await User.findById(driverId);
-  }
-  if (!driverUser) {
-    const dp = await DriverProfile.findById(driverId);
-    if (dp) driverUser = await User.findById(dp.userId);
+  let driverProfile = null;
+
+  // 1. If an explicit driverId is provided, resolve that specific driver
+  if (inputDriverId && mongoose.isValidObjectId(inputDriverId)) {
+    driverUser = await User.findById(inputDriverId);
+    if (!driverUser) {
+      driverProfile = await DriverProfile.findById(inputDriverId);
+      if (driverProfile) driverUser = await User.findById(driverProfile.userId);
+    } else {
+      driverProfile = await DriverProfile.findOne({ userId: driverUser._id });
+    }
   }
 
-  const assignedDriverId = driverUser ? driverUser._id : (mongoose.isValidObjectId(driverId) ? new mongoose.Types.ObjectId(driverId) : new mongoose.Types.ObjectId("6accc2d28292d50951101b01"));
+  // 2. If no driverId provided (auto-assign mode): find real active online & approved driver from DB
+  if (!driverUser) {
+    driverProfile = await DriverProfile.findOne({ availability: "ONLINE", applicationStatus: "APPROVED" })
+      .populate("userId")
+      .sort({ updatedAt: -1 });
+
+    if (driverProfile?.userId) {
+      driverUser = driverProfile.userId;
+    }
+  }
+
+  // 3. Fallback to any approved driver in database if none currently ONLINE
+  if (!driverUser) {
+    driverProfile = await DriverProfile.findOne({ applicationStatus: "APPROVED" })
+      .populate("userId")
+      .sort({ updatedAt: -1 });
+
+    if (driverProfile?.userId) {
+      driverUser = driverProfile.userId;
+    }
+  }
+
+  // 4. Fallback to any active driver user
+  if (!driverUser) {
+    driverUser = await User.findOne({ role: "driver", status: "ACTIVE" });
+    if (driverUser) {
+      driverProfile = await DriverProfile.findOne({ userId: driverUser._id });
+    }
+  }
+
+  if (!driverUser) {
+    return fail(res, 404, "No active driver found in system to assign", "NO_DRIVER_FOUND");
+  }
+
+  const assignedDriverId = driverUser._id;
 
   let ride = null;
   if (mongoose.isValidObjectId(rideId)) {
@@ -292,6 +332,10 @@ router.post("/admin/rides/:id/assign", requireAuth, allowRoles("admin"), asyncHa
     ride.driverId = assignedDriverId;
     ride.status = "DRIVER_ASSIGNED";
     await ride.save();
+
+    // Broadcast real-time driver assignment to rider
+    emitRideStatus(ride._id, ride.status);
+    emitDriverAssigned(ride.riderId, ride._id, driverUser, driverProfile?.vehicle, 3);
   }
 
   return ok(res, {
@@ -300,8 +344,8 @@ router.post("/admin/rides/:id/assign", requireAuth, allowRoles("admin"), asyncHa
     actualRideId: ride?._id || null,
     status: "DRIVER_ASSIGNED",
     driverId: assignedDriverId,
-    driverName: driverUser?.fullName || "Vikram Singh",
-    phone: driverUser?.phone || "+919876500112",
+    driverName: driverUser.fullName || "Driver Partner",
+    phone: driverUser.phone,
     reason: req.body.reason || "Manual assignment by admin",
     assignedAt: new Date().toISOString()
   }, "Driver assigned to ride successfully");
