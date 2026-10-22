@@ -760,7 +760,7 @@ Section 6.1 Rider My Account aur Saved Places screen lifecycle ko cover karta ha
 
 ### 9.2 `POST /rider/saved-places` — [CREATE SAVED PLACE & AUTO-SAVE ID]
 - **Purpose:** Naya saved place add karta hai. Allowed types: `HOME`, `WORK`, `GYM`, `CAFE`, `CUSTOM`. (`CUSTOM` ke liye `name` required hai).
-- **Postman Auto-save:** Response ka `id` automatically collection variable `{{savedPlaceId}}` me save ho jata hai.
+- **Postman Auto-save:** Response ka `placeId` automatically collection variables `{{placeId}}` aur `{{savedPlaceId}}` dono me save ho jata hai.
 - **URL:** `POST {{baseUrl}}/rider/saved-places`
 - **Headers:**
   - `Content-Type: application/json`
@@ -782,12 +782,12 @@ Section 6.1 Rider My Account aur Saved Places screen lifecycle ko cover karta ha
   "message": "Saved place created successfully",
   "data": {
     "id": "6ad9c70523d9fc5606aec135",
+    "placeId": "6ad9c70523d9fc5606aec135",
     "type": "HOME",
     "name": "Home",
     "address": "Flat 402, Prestige Lakeside Habitat, Varthur, Bengaluru",
     "latitude": 12.9352,
     "longitude": 77.699,
-    "placeId": null,
     "createdAt": "2026-10-22T08:19:17.602Z",
     "updatedAt": "2026-10-22T08:19:17.602Z"
   }
@@ -809,12 +809,12 @@ Section 6.1 Rider My Account aur Saved Places screen lifecycle ko cover karta ha
     "items": [
       {
         "id": "6ad9c70523d9fc5606aec135",
+        "placeId": "6ad9c70523d9fc5606aec135",
         "type": "HOME",
         "name": "Home",
         "address": "Flat 402, Prestige Lakeside Habitat, Varthur, Bengaluru",
         "latitude": 12.9352,
         "longitude": 77.699,
-        "placeId": null,
         "createdAt": "2026-10-22T08:19:17.602Z",
         "updatedAt": "2026-10-22T08:19:17.602Z"
       }
@@ -832,7 +832,7 @@ Section 6.1 Rider My Account aur Saved Places screen lifecycle ko cover karta ha
 
 ### 9.4 `GET /rider/saved-places/:placeId` — [GET SAVED PLACE DETAILS]
 - **Purpose:** Specific saved place ki details fetch karta hai (edit form open karne ya details dekhne ke liye).
-- **URL:** `GET {{baseUrl}}/rider/saved-places/{{savedPlaceId}}`
+- **URL:** `GET {{baseUrl}}/rider/saved-places/{{placeId}}`
 - **Headers:** `Authorization: Bearer {{riderToken}}`
 - **Response Example (200 OK):**
 ```json
@@ -841,12 +841,12 @@ Section 6.1 Rider My Account aur Saved Places screen lifecycle ko cover karta ha
   "message": "Saved place fetched successfully",
   "data": {
     "id": "6ad9c70523d9fc5606aec135",
+    "placeId": "6ad9c70523d9fc5606aec135",
     "type": "HOME",
     "name": "Home",
     "address": "Flat 402, Prestige Lakeside Habitat, Varthur, Bengaluru",
     "latitude": 12.9352,
     "longitude": 77.699,
-    "placeId": null,
     "createdAt": "2026-10-22T08:19:17.602Z",
     "updatedAt": "2026-10-22T08:19:17.602Z"
   }
@@ -857,7 +857,7 @@ Section 6.1 Rider My Account aur Saved Places screen lifecycle ko cover karta ha
 
 ### 9.5 `PATCH /rider/saved-places/:placeId` — [UPDATE SAVED PLACE]
 - **Purpose:** Existing saved place ke fields (`name`, `address`, `type`, `latitude`, `longitude`, `placeId`) ko update karta hai.
-- **URL:** `PATCH {{baseUrl}}/rider/saved-places/{{savedPlaceId}}`
+- **URL:** `PATCH {{baseUrl}}/rider/saved-places/{{placeId}}`
 - **Headers:**
   - `Content-Type: application/json`
   - `Authorization: Bearer {{riderToken}}`
@@ -875,12 +875,12 @@ Section 6.1 Rider My Account aur Saved Places screen lifecycle ko cover karta ha
   "message": "Saved place updated successfully",
   "data": {
     "id": "6ad9c70523d9fc5606aec135",
+    "placeId": "6ad9c70523d9fc5606aec135",
     "type": "HOME",
     "name": "Work / Office",
     "address": "Bagmane Tech Park, CV Raman Nagar, Bengaluru",
     "latitude": 12.9352,
     "longitude": 77.699,
-    "placeId": null,
     "createdAt": "2026-10-22T08:19:17.602Z",
     "updatedAt": "2026-10-22T08:21:00.000Z"
   }
@@ -891,7 +891,7 @@ Section 6.1 Rider My Account aur Saved Places screen lifecycle ko cover karta ha
 
 ### 9.6 `DELETE /rider/saved-places/:placeId` — [DELETE SAVED PLACE]
 - **Purpose:** Logged-in rider ke saved place record ko delete karta hai.
-- **URL:** `DELETE {{baseUrl}}/rider/saved-places/{{savedPlaceId}}`
+- **URL:** `DELETE {{baseUrl}}/rider/saved-places/{{placeId}}`
 - **Headers:** `Authorization: Bearer {{riderToken}}`
 - **Response Example (200 OK):**
 ```json

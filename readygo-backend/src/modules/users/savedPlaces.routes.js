@@ -37,17 +37,21 @@ const updateSavedPlaceSchema = z.object({
   placeId: z.string().trim().max(255).optional().nullable()
 });
 
-const formatPlace = (p) => ({
-  id: p._id ? p._id.toString() : p.id,
-  type: p.type,
-  name: p.name,
-  address: p.address,
-  latitude: p.latitude ?? null,
-  longitude: p.longitude ?? null,
-  placeId: p.placeId ?? null,
-  createdAt: p.createdAt,
-  updatedAt: p.updatedAt
-});
+const formatPlace = (p) => {
+  const idStr = p._id ? p._id.toString() : (p.id || "");
+  const pId = p.placeId && p.placeId !== "null" ? p.placeId : idStr;
+  return {
+    id: idStr,
+    placeId: pId,
+    type: p.type,
+    name: p.name,
+    address: p.address,
+    latitude: p.latitude ?? null,
+    longitude: p.longitude ?? null,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt
+  };
+};
 
 // GET /rider/account/overview - Load My Account screen summary
 router.get(
@@ -144,15 +148,18 @@ router.post(
     };
 
     const finalName = name && name.trim() ? name.trim() : (defaultNames[type] || "Saved Place");
+    const id = new mongoose.Types.ObjectId();
+    const finalPlaceId = placeId && placeId.trim() ? placeId.trim() : id.toString();
 
     const place = await SavedPlace.create({
+      _id: id,
       userId: req.user._id,
       type: type || "CUSTOM",
       name: finalName,
       address,
       latitude: latitude ?? null,
       longitude: longitude ?? null,
-      placeId: placeId ?? null
+      placeId: finalPlaceId
     });
 
     return ok(res, formatPlace(place), "Saved place created successfully", 201);
@@ -235,3 +242,4 @@ router.delete(
 );
 
 export default router;
+

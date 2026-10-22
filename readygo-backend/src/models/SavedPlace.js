@@ -56,3 +56,4 @@ const savedPlaceSchema = new mongoose.Schema({
 savedPlaceSchema.index({ userId: 1, createdAt: -1 });
 
 export default mongoose.model("SavedPlace", savedPlaceSchema);
+

@@ -100,6 +100,11 @@
       "key": "savedPlaceId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "placeId",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -1591,10 +1596,11 @@
                     "exec": [
                       "if (pm.response.code === 201 || pm.response.code === 200) {",
                       "  var res = pm.response.json();",
-                      "  var placeId = res.data?.id || res.data?._id;",
+                      "  var placeId = res.data?.placeId || res.data?.id || res.data?._id;",
                       "  if (placeId) {",
+                      "    pm.collectionVariables.set('placeId', placeId);",
                       "    pm.collectionVariables.set('savedPlaceId', placeId);",
-                      "    console.log('Saved savedPlaceId:', placeId);",
+                      "    console.log('Saved placeId & savedPlaceId:', placeId);",
                       "  }",
                       "}"
                     ],
@@ -1680,14 +1686,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/rider/saved-places/{{savedPlaceId}}",
+                  "raw": "{{baseUrl}}/rider/saved-places/{{placeId}}",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "rider",
                     "saved-places",
-                    "{{savedPlaceId}}"
+                    "{{placeId}}"
                   ]
                 },
                 "description": "▶️ **[GET SAVED PLACE BY ID]**\n- **Purpose:** Specific saved place ki details fetch karta hai edit/view ke liye."
@@ -1717,14 +1723,14 @@
                   }
                 },
                 "url": {
-                  "raw": "{{baseUrl}}/rider/saved-places/{{savedPlaceId}}",
+                  "raw": "{{baseUrl}}/rider/saved-places/{{placeId}}",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "rider",
                     "saved-places",
-                    "{{savedPlaceId}}"
+                    "{{placeId}}"
                   ]
                 },
                 "description": "▶️ **[UPDATE SAVED PLACE]**\n- **Purpose:** Existing saved place ke fields (name, address, type, coordinates) update karta hai."
@@ -1741,14 +1747,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/rider/saved-places/{{savedPlaceId}}",
+                  "raw": "{{baseUrl}}/rider/saved-places/{{placeId}}",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "rider",
                     "saved-places",
-                    "{{savedPlaceId}}"
+                    "{{placeId}}"
                   ]
                 },
                 "description": "▶️ **[DELETE SAVED PLACE]**\n- **Purpose:** Logged-in rider ke saved place ko delete karta hai."
