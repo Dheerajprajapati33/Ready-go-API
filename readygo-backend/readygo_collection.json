@@ -95,6 +95,11 @@
       "key": "deviceId",
       "value": "dev_driver_pixel_01",
       "type": "string"
+    },
+    {
+      "key": "savedPlaceId",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -1546,6 +1551,207 @@
                   ]
                 },
                 "description": "▶️ **[GET RIDE RECEIPT]**\n- **Purpose:** Completed ride ki payment receipt, fare breakdown, aur status fetch karta hai. Supports both real ObjectId and custom test string like 'ride_123'."
+              }
+            }
+          ]
+        },
+        {
+          "name": "9. Rider My Account & Saved Places",
+          "item": [
+            {
+              "name": "account-overview",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{riderToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/rider/account/overview",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rider",
+                    "account",
+                    "overview"
+                  ]
+                },
+                "description": "▶️ **[GET ACCOUNT OVERVIEW]**\n- **Purpose:** My Account screen summary — Profile summary, rating, total rides, and available account menu items."
+              }
+            },
+            {
+              "name": "create-saved-place",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201 || pm.response.code === 200) {",
+                      "  var res = pm.response.json();",
+                      "  var placeId = res.data?.id || res.data?._id;",
+                      "  if (placeId) {",
+                      "    pm.collectionVariables.set('savedPlaceId', placeId);",
+                      "    console.log('Saved savedPlaceId:', placeId);",
+                      "  }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{riderToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"HOME\",\n  \"name\": \"Home\",\n  \"address\": \"Flat 402, Prestige Lakeside Habitat, Varthur, Bengaluru\",\n  \"latitude\": 12.9352,\n  \"longitude\": 77.699\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/rider/saved-places",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rider",
+                    "saved-places"
+                  ]
+                },
+                "description": "▶️ **[CREATE SAVED PLACE]**\n- **Purpose:** Naya saved place add karta hai (HOME, WORK, GYM, CAFE, CUSTOM)."
+              }
+            },
+            {
+              "name": "list-saved-places",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{riderToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/rider/saved-places?page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rider",
+                    "saved-places"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "▶️ **[LIST SAVED PLACES]**\n- **Purpose:** Current rider ke saare saved places with pagination fetch karta hai."
+              }
+            },
+            {
+              "name": "get-saved-place-by-id",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{riderToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/rider/saved-places/{{savedPlaceId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rider",
+                    "saved-places",
+                    "{{savedPlaceId}}"
+                  ]
+                },
+                "description": "▶️ **[GET SAVED PLACE BY ID]**\n- **Purpose:** Specific saved place ki details fetch karta hai edit/view ke liye."
+              }
+            },
+            {
+              "name": "update-saved-place",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{riderToken}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Work / Office\",\n  \"address\": \"Bagmane Tech Park, CV Raman Nagar, Bengaluru\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/rider/saved-places/{{savedPlaceId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rider",
+                    "saved-places",
+                    "{{savedPlaceId}}"
+                  ]
+                },
+                "description": "▶️ **[UPDATE SAVED PLACE]**\n- **Purpose:** Existing saved place ke fields (name, address, type, coordinates) update karta hai."
+              }
+            },
+            {
+              "name": "delete-saved-place",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{riderToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/rider/saved-places/{{savedPlaceId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rider",
+                    "saved-places",
+                    "{{savedPlaceId}}"
+                  ]
+                },
+                "description": "▶️ **[DELETE SAVED PLACE]**\n- **Purpose:** Logged-in rider ke saved place ko delete karta hai."
               }
             }
           ]
