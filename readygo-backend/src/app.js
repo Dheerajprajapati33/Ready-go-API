@@ -22,6 +22,7 @@ import driverSupportRoutes from "./modules/driver/driverSupport.routes.js";
 import driverReferralRoutes from "./modules/driver/driverReferral.routes.js";
 import driverNotificationRoutes from "./modules/driver/driverNotification.routes.js";
 import savedPlacesRoutes from "./modules/users/savedPlaces.routes.js";
+import mapRoutes from "./modules/maps/maps.routes.js";
 
 const app=express();
 app.set("trust proxy", 1);
@@ -54,6 +55,8 @@ for (const p of prefixes) {
   app.use(`${p}`, driverReferralRoutes);
   app.use(`${p}`, driverNotificationRoutes);
   app.use(`${p}`, savedPlacesRoutes);
+  app.use(`${p}/maps`, mapRoutes);
+  app.use(`${p}`, mapRoutes);
 }
 app.use(notFound);
 app.use(errorHandler);
