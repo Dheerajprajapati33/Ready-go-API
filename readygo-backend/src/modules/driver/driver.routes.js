@@ -882,131 +882,180 @@ router.get("/driver/trips/:tripId", requireAuth, allowRoles("driver", "admin", "
 
   return ok(res, trip, "Trip details retrieved");
 }));
-router.get("/driver/earnings", requireAuth, allowRoles("driver", "admin", "rider"), (req, res) => ok(res, { currency: "INR", grossFarePaise: 125000, netPayoutPaise: 100000, tripCount: 15, note: "Earnings summary" }));
-router.get("/driver/earnings/summary", requireAuth, allowRoles("driver", "admin", "rider"), (req, res) => ok(res, { currency: "INR", grossFarePaise: 125000, netPayoutPaise: 100000, todayEarningsPaise: 35000, weekEarningsPaise: 85000, tripCount: 15 }));
+async function getDriverEarningsForPeriod(driverId, startDate) {
+  const filter = {
+    driverId,
+    status: "COMPLETED"
+  };
+  if (startDate) {
+    filter.createdAt = { $gte: startDate };
+  }
+
+  const rides = await Ride.find(filter).lean();
+  const tripCount = rides.length;
+
+  let grossFarePaise = 0;
+  let baseFarePaise = 0;
+  let distanceFarePaise = 0;
+  let surgeFarePaise = 0;
+  let tipsPaise = 0;
+
+  for (const r of rides) {
+    const fb = r.fareBreakdown || {};
+    const total = fb.totalPaise || (r.farePaise || 0);
+    grossFarePaise += total;
+    baseFarePaise += fb.baseFarePaise || 0;
+    distanceFarePaise += fb.distanceFarePaise || 0;
+    surgeFarePaise += fb.surgeFarePaise || 0;
+    tipsPaise += fb.tipPaise || 0;
+  }
+
+  // 20% platform commission
+  const platformFeePaise = Math.round(grossFarePaise * 0.20);
+  const netPayoutPaise = Math.max(0, grossFarePaise - platformFeePaise);
+
+  return {
+    tripCount,
+    grossFarePaise,
+    netPayoutPaise,
+    baseFarePaise,
+    distanceFarePaise,
+    surgeFarePaise,
+    tipsPaise,
+    platformFeePaise
+  };
+}
+
+router.get("/driver/earnings", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  const earnings = await getDriverEarningsForPeriod(req.user._id);
+  return ok(res, {
+    currency: "INR",
+    grossFarePaise: earnings.grossFarePaise,
+    netPayoutPaise: earnings.netPayoutPaise,
+    tripCount: earnings.tripCount,
+    note: "Earnings summary"
+  });
+}));
+
+router.get("/driver/earnings/summary", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const weekStart = new Date(Date.now() - 7 * 86400000);
+
+  const [allTime, today, week] = await Promise.all([
+    getDriverEarningsForPeriod(req.user._id),
+    getDriverEarningsForPeriod(req.user._id, todayStart),
+    getDriverEarningsForPeriod(req.user._id, weekStart)
+  ]);
+
+  return ok(res, {
+    currency: "INR",
+    grossFarePaise: allTime.grossFarePaise,
+    netPayoutPaise: allTime.netPayoutPaise,
+    todayEarningsPaise: today.netPayoutPaise,
+    weekEarningsPaise: week.netPayoutPaise,
+    tripCount: allTime.tripCount
+  });
+}));
 
 router.get("/driver/earnings/breakdown", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
   const period = req.query.period || "week";
-  const completedRides = await Ride.find({ driverId: req.user._id, status: "COMPLETED" }).sort({ createdAt: -1 }).limit(20);
+  const startDate = period === "month"
+    ? new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    : period === "daily"
+      ? new Date(new Date().setHours(0, 0, 0, 0))
+      : new Date(Date.now() - 7 * 86400000);
 
-  const baseFare = 85000;
-  const distanceFare = 42000;
-  const surgeFare = 15000;
-  const tips = 5000;
-  const platformFee = 22000;
-  const incentives = 10000;
-  const gross = baseFare + distanceFare + surgeFare + tips;
-  const net = gross - platformFee + incentives;
+  const earnings = await getDriverEarningsForPeriod(req.user._id, startDate);
 
   return ok(res, {
     period,
     currency: "INR",
-    grossEarnings: gross / 100,
-    netEarnings: net / 100,
+    grossEarnings: earnings.grossFarePaise / 100,
+    netEarnings: earnings.netPayoutPaise / 100,
     breakdown: {
-      baseFare: baseFare / 100,
-      distanceFare: distanceFare / 100,
-      surgeBonus: surgeFare / 100,
-      tips: tips / 100,
-      incentivesBonus: incentives / 100,
-      platformDeduction: -(platformFee / 100)
+      baseFare: earnings.baseFarePaise / 100,
+      distanceFare: earnings.distanceFarePaise / 100,
+      surgeBonus: earnings.surgeFarePaise / 100,
+      tips: earnings.tipsPaise / 100,
+      incentivesBonus: 0,
+      platformDeduction: -(earnings.platformFeePaise / 100)
     },
-    totalTrips: completedRides.length || 18,
-    onlineHours: 24.5
+    totalTrips: earnings.tripCount,
+    onlineHours: 0
   }, "Earnings breakdown retrieved successfully");
 }));
 
-router.get("/driver/earnings/daily", requireAuth, allowRoles("driver", "admin", "rider"), (req, res) => ok(res, {
-  period: "daily",
-  currency: "INR",
-  totalEarnings: 1450,
-  tripsCount: 6,
-  onlineHours: 4.8,
-  date: new Date().toISOString().split("T")[0]
-}, "Daily earnings retrieved"));
+router.get("/driver/earnings/daily", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const earnings = await getDriverEarningsForPeriod(req.user._id, todayStart);
 
-router.get("/driver/earnings/weekly", requireAuth, allowRoles("driver", "admin", "rider"), (req, res) => ok(res, {
-  period: "weekly",
-  currency: "INR",
-  totalEarnings: 8900,
-  tripsCount: 38,
-  onlineHours: 28.5,
-  weekStartDate: new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0]
-}, "Weekly earnings retrieved"));
+  return ok(res, {
+    period: "daily",
+    currency: "INR",
+    totalEarnings: earnings.netPayoutPaise / 100,
+    tripsCount: earnings.tripCount,
+    onlineHours: 0,
+    date: new Date().toISOString().split("T")[0]
+  }, "Daily earnings retrieved");
+}));
 
-router.get("/driver/earnings/monthly", requireAuth, allowRoles("driver", "admin", "rider"), (req, res) => ok(res, {
-  period: "monthly",
-  currency: "INR",
-  totalEarnings: 36500,
-  tripsCount: 154,
-  onlineHours: 118,
-  month: new Date().toLocaleString("default", { month: "long", year: "numeric" })
-}, "Monthly earnings retrieved"));
-const sampleIncentives = [
+router.get("/driver/earnings/weekly", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  const weekStart = new Date(Date.now() - 7 * 86400000);
+  const earnings = await getDriverEarningsForPeriod(req.user._id, weekStart);
+
+  return ok(res, {
+    period: "weekly",
+    currency: "INR",
+    totalEarnings: earnings.netPayoutPaise / 100,
+    tripsCount: earnings.tripCount,
+    onlineHours: 0,
+    weekStartDate: weekStart.toISOString().split("T")[0]
+  }, "Weekly earnings retrieved");
+}));
+
+router.get("/driver/earnings/monthly", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const earnings = await getDriverEarningsForPeriod(req.user._id, monthStart);
+
+  return ok(res, {
+    period: "monthly",
+    currency: "INR",
+    totalEarnings: earnings.netPayoutPaise / 100,
+    tripsCount: earnings.tripCount,
+    onlineHours: 0,
+    month: new Date().toLocaleString("default", { month: "long", year: "numeric" })
+  }, "Monthly earnings retrieved");
+}));
+
+const activeQuests = [
   {
-    _id: "inc_daily_10",
     id: "inc_daily_10",
-    incentiveId: "inc_daily_10",
+    _id: "inc_daily_10",
     title: "Daily Ride Goal",
     description: "Complete 10 trips today between 6 AM to 11 PM",
     targetTrips: 10,
-    completedTrips: 4,
+    completedTrips: 0,
     rewardAmount: 500,
     currency: "INR",
-    status: "IN_PROGRESS",
-    expiresAt: new Date(new Date().setHours(23, 59, 59, 999)).toISOString()
-  },
-  {
-    _id: "inc_peak_rush",
-    id: "inc_peak_rush",
-    incentiveId: "inc_peak_rush",
-    title: "Evening Peak Rush",
-    description: "Complete 5 trips between 5 PM and 9 PM",
-    targetTrips: 5,
-    completedTrips: 2,
-    rewardAmount: 300,
-    currency: "INR",
-    status: "IN_PROGRESS",
-    expiresAt: new Date(new Date().setHours(21, 0, 0, 0)).toISOString()
-  },
-  {
-    _id: "inc_weekend_hero",
-    id: "inc_weekend_hero",
-    incentiveId: "inc_weekend_hero",
-    title: "Weekend Champion",
-    description: "Complete 25 trips over Saturday & Sunday",
-    targetTrips: 25,
-    completedTrips: 18,
-    rewardAmount: 1500,
-    currency: "INR",
-    status: "IN_PROGRESS",
-    expiresAt: new Date(Date.now() + 2 * 86400000).toISOString()
+    status: "IN_PROGRESS"
   }
 ];
 
 router.get("/driver/incentives", requireAuth, allowRoles("driver", "admin", "rider"), (req, res) => {
   return ok(res, {
-    items: sampleIncentives,
-    totalRewardsAvailable: 2300,
+    items: activeQuests,
+    totalRewardsAvailable: 500,
     currency: "INR"
   }, "Driver incentives retrieved successfully");
 });
 
 router.get("/driver/incentives/:incentiveId", requireAuth, allowRoles("driver", "admin", "rider"), (req, res) => {
-  const found = sampleIncentives.find(i => i.id === req.params.incentiveId);
-  const data = found || {
-    id: req.params.incentiveId,
-    title: "Trip Target Incentive",
-    description: "Complete your ride target to unlock cash bonus",
-    targetTrips: 10,
-    completedTrips: 4,
-    progressPercentage: 40,
-    rewardAmount: 500,
-    currency: "INR",
-    status: "IN_PROGRESS",
-    terms: ["Rides must be completed within city limits", "Cancellation rate must be below 5%"]
-  };
-  return ok(res, data, "Incentive details retrieved successfully");
+  const id = req.params.incentiveId;
+  const found = activeQuests.find(q => q.id === id) || activeQuests[0];
+  return ok(res, found, "Incentive details retrieved successfully");
 });
 router.get("/driver/profile/stats", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
   const totalTrips = await Ride.countDocuments({ driverId: req.user._id, status: "COMPLETED" });
@@ -1054,15 +1103,6 @@ router.get("/drivers/nearby", asyncHandler(async (req, res) => {
       etaMinutes: Math.max(1, Math.round(dist * 3))
     };
   }).filter(d => d.distanceKm <= radiusKm);
-
-  // Fallback demo drivers for map visualization if no live drivers online
-  if (nearby.length === 0) {
-    nearby = [
-      { driverId: "demo_driver_1", name: "Ramesh Kumar", vehicleCategory: "moto", latitude: lat + 0.003, longitude: lon + 0.002, bearing: 45, rating: 4.9, distanceKm: 0.4, etaMinutes: 2 },
-      { driverId: "demo_driver_2", name: "Suresh Singh", vehicleCategory: "auto", latitude: lat - 0.004, longitude: lon + 0.003, bearing: 120, rating: 4.7, distanceKm: 0.6, etaMinutes: 3 },
-      { driverId: "demo_driver_3", name: "Amit Verma", vehicleCategory: "mini", latitude: lat + 0.005, longitude: lon - 0.004, bearing: 210, rating: 4.8, distanceKm: 0.8, etaMinutes: 4 }
-    ];
-  }
 
   return ok(res, { count: nearby.length, drivers: nearby }, "Nearby drivers retrieved");
 }));

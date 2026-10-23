@@ -46,21 +46,14 @@ router.get("/driver/ratings", requireAuth, allowRoles("driver", "admin", "rider"
 }));
 
 router.get("/driver/ratings/:ratingId", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
-  let r = null;
-  if (mongoose.isValidObjectId(req.params.ratingId)) {
-    r = await Rating.findOne({ _id: req.params.ratingId, driverId: req.user._id }).populate("raterId", "fullName avatarUrl");
+  if (!mongoose.isValidObjectId(req.params.ratingId)) {
+    return fail(res, 404, "Rating not found", "NOT_FOUND");
   }
 
+  const r = await Rating.findOne({ _id: req.params.ratingId, driverId: req.user._id }).populate("raterId", "fullName avatarUrl");
+
   if (!r) {
-    // Demo fallback for testing placeholder IDs (like rating_123)
-    return ok(res, {
-      id: req.params.ratingId,
-      riderDisplayName: "Aman S.",
-      stars: 5,
-      comment: "Smooth ride, polite and safe driving!",
-      createdAt: new Date().toISOString(),
-      moderationStatus: "PUBLISHED"
-    }, "Rating details retrieved");
+    return fail(res, 404, "Rating not found", "NOT_FOUND");
   }
 
   return ok(res, {
@@ -74,20 +67,13 @@ router.get("/driver/ratings/:ratingId", requireAuth, allowRoles("driver", "admin
 }));
 
 router.post("/driver/ratings/:ratingId/report", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
-  let r = null;
-  if (mongoose.isValidObjectId(req.params.ratingId)) {
-    r = await Rating.findOne({ _id: req.params.ratingId });
+  if (!mongoose.isValidObjectId(req.params.ratingId)) {
+    return fail(res, 404, "Rating not found", "NOT_FOUND");
   }
 
+  const r = await Rating.findOne({ _id: req.params.ratingId });
   if (!r) {
-    // Demo fallback for testing placeholder IDs (like rating_123)
-    return ok(res, {
-      ratingId: req.params.ratingId,
-      moderationStatus: "UNDER_REVIEW",
-      reason: req.body?.reason || "abusive",
-      description: req.body?.description || "",
-      reportedAt: new Date().toISOString()
-    }, "Review reported successfully");
+    return fail(res, 404, "Rating not found", "NOT_FOUND");
   }
 
   r.reportedAt = new Date();

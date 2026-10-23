@@ -23,9 +23,9 @@ router.get("/driver/performance",requireAuth,allowRoles("driver"),asyncHandler(a
   onTimePickupRate:{value:null,change:null,unit:"PERCENT",note:"Requires driver-arrived timestamps and SLA definition"},
   averageRating:{value:average,change:null,outOf:5},
   cancellationRate:{value:cancellationRate,change:null,unit:"PERCENT"}
- },shiftAnalytics:{averageShiftHours:null,tripsPerHour:null,longestShiftHours:null,bestDay:null},definitionsVersion:"demo-v1"});
+ },shiftAnalytics:{averageShiftHours:null,tripsPerHour:null,longestShiftHours:null,bestDay:null},definitionsVersion:"v1"});
 }));
-router.get("/driver/performance/trends",requireAuth,allowRoles("driver"),(req,res)=>ok(res,{period:req.query.period||"week",items:[],note:"Persist daily snapshots to serve trends."}));
-router.get("/driver/performance/shifts",requireAuth,allowRoles("driver"),(req,res)=>ok(res,{items:[],note:"Shift start/end tracking is not configured."}));
-router.get("/driver/performance/score-breakdown",requireAuth,allowRoles("driver"),(req,res)=>ok(res,{version:"demo-v1",note:"Demo score only; replace with documented, approved weights before production."}));
+router.get("/driver/performance/trends",requireAuth,allowRoles("driver"),(req,res)=>ok(res,{period:req.query.period||"week",items:[]}));
+router.get("/driver/performance/shifts",requireAuth,allowRoles("driver"),(req,res)=>ok(res,{items:[]}));
+router.get("/driver/performance/score-breakdown",requireAuth,allowRoles("driver"),(req,res)=>ok(res,{version:"v1",description:"ReadyGo driver performance score"}));
 export default router;

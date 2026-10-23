@@ -230,99 +230,29 @@ router.get("/driver/support/tickets", requireAuth, allowRoles("driver", "admin",
 }));
 
 async function resolveTicket(ticketIdParam, user) {
-  const isPlaceholder =
-    !ticketIdParam ||
-    ticketIdParam === "{{ticketId}}" ||
-    ticketIdParam === "%7B%7BticketId%7D%7D" ||
-    ticketIdParam.includes("{{ticketId}}") ||
-    ticketIdParam === "ticket_123";
+  if (!ticketIdParam) return null;
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(ticketIdParam);
+  const conditions = [{ ticketId: ticketIdParam }];
+  if (isObjectId) conditions.push({ _id: ticketIdParam });
 
-  if (isPlaceholder) {
-    let latest = await SupportTicket.findOne({ driverId: user._id }).sort({ createdAt: -1 });
-    if (latest) return latest;
+  const query = user?.role === "admin"
+    ? { $or: conditions }
+    : { driverId: user._id, $or: conditions };
 
-    return await SupportTicket.create({
-      ticketId: "ticket_123",
-      driverId: user._id,
-      category: "PAYMENTS_PAYOUTS",
-      subject: "Trip payout not received",
-      description: "Payout for trip BLR-8823 is missing.",
-      rideId: "ride_8823",
-      priority: "NORMAL",
-      status: "OPEN",
-      messages: [
-        {
-          messageId: "msg_init_1",
-          senderId: user._id,
-          senderRole: "driver",
-          senderName: user.fullName || "Driver",
-          message: "Payout for trip BLR-8823 is missing.",
-          createdAt: new Date()
-        }
-      ]
-    });
-  }
-
-  let ticket = await SupportTicket.findOne({
-    $or: [{ ticketId: ticketIdParam }, { _id: ticketIdParam.match(/^[0-9a-fA-F]{24}$/) ? ticketIdParam : null }]
-  });
-
-  if (!ticket && ticketIdParam.startsWith("ticket_")) {
-    ticket = await SupportTicket.create({
-      ticketId: ticketIdParam,
-      driverId: user._id,
-      category: "PAYMENTS_PAYOUTS",
-      subject: "Trip payout query",
-      description: "Initial ticket query",
-      status: "OPEN"
-    });
-  }
-
-  return ticket;
+  return SupportTicket.findOne(query);
 }
 
 async function resolveChatSession(sessionIdParam, user) {
-  const isPlaceholder =
-    !sessionIdParam ||
-    sessionIdParam === "{{liveChatSessionId}}" ||
-    sessionIdParam === "%7B%7BliveChatSessionId%7D%7D" ||
-    sessionIdParam === "{{sessionId}}" ||
-    sessionIdParam === "%7B%7BsessionId%7D%7D" ||
-    sessionIdParam.includes("{{") ||
-    sessionIdParam === "session_123";
+  if (!sessionIdParam) return null;
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(sessionIdParam);
+  const conditions = [{ sessionId: sessionIdParam }];
+  if (isObjectId) conditions.push({ _id: sessionIdParam });
 
-  if (isPlaceholder) {
-    let latest = await LiveChatSession.findOne({ driverId: user._id }).sort({ createdAt: -1 });
-    if (latest) return latest;
+  const query = user?.role === "admin"
+    ? { $or: conditions }
+    : { driverId: user._id, $or: conditions };
 
-    return await LiveChatSession.create({
-      sessionId: "session_123",
-      driverId: user._id,
-      category: "RIDE_ISSUES",
-      initialMessage: "Live support chat requested.",
-      status: "QUEUED",
-      queuePosition: 1,
-      estimatedWaitSeconds: 45
-    });
-  }
-
-  let session = await LiveChatSession.findOne({
-    $or: [{ sessionId: sessionIdParam }, { _id: sessionIdParam.match(/^[0-9a-fA-F]{24}$/) ? sessionIdParam : null }]
-  });
-
-  if (!session && (sessionIdParam.startsWith("session_") || sessionIdParam.startsWith("chat_"))) {
-    session = await LiveChatSession.create({
-      sessionId: sessionIdParam,
-      driverId: user._id,
-      category: "RIDE_ISSUES",
-      initialMessage: "Live support chat requested.",
-      status: "QUEUED",
-      queuePosition: 1,
-      estimatedWaitSeconds: 45
-    });
-  }
-
-  return session;
+  return LiveChatSession.findOne(query);
 }
 
 // 25.1.6 GET /driver/support/tickets/:ticketId

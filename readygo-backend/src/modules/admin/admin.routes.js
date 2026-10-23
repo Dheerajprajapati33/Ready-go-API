@@ -106,11 +106,10 @@ router.get("/admin/driver-applications", requireAuth, allowRoles("admin", "safet
 }));
 
 router.get("/admin/driver-applications/:id", requireAuth, allowRoles("admin"), asyncHandler(async (req, res) => {
-  let p = null;
-  if (mongoose.isValidObjectId(req.params.id)) {
-    p = await DriverProfile.findById(req.params.id).populate("userId", "fullName phone email");
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return fail(res, 404, "Application not found", "NOT_FOUND");
   }
-  if (!p) p = await DriverProfile.findOne().populate("userId", "fullName phone email");
+  const p = await DriverProfile.findById(req.params.id).populate("userId", "fullName phone email");
   if (!p) return fail(res, 404, "Application not found", "NOT_FOUND");
   return ok(res, p);
 }));
@@ -129,19 +128,12 @@ router.post("/admin/driver-applications/:id/review", requireAuth, allowRoles("ad
     return fail(res, 400, "Invalid review status", "VALIDATION_ERROR");
   }
 
-  let id = req.params.id;
-  let p = null;
-
-  if (id && mongoose.isValidObjectId(id)) {
-    p = await DriverProfile.findById(id);
+  const id = req.params.id;
+  if (!id || !mongoose.isValidObjectId(id)) {
+    return fail(res, 404, "Application not found", "NOT_FOUND");
   }
 
-  // Fallback if Postman variable {{applicationId}} was sent without being resolved
-  if (!p) {
-    p = await DriverProfile.findOne({ applicationStatus: { $ne: "APPROVED" } }).sort({ updatedAt: -1 })
-      || await DriverProfile.findOne().sort({ updatedAt: -1 });
-  }
-
+  const p = await DriverProfile.findById(id);
   if (!p) return fail(res, 404, "Application not found", "NOT_FOUND");
 
   const prevStatus = p.applicationStatus;
@@ -318,25 +310,22 @@ router.post("/admin/rides/:id/assign", requireAuth, allowRoles("admin"), asyncHa
 
   const assignedDriverId = driverUser._id;
 
-  let ride = null;
-  if (mongoose.isValidObjectId(rideId)) {
-    ride = await Ride.findById(rideId);
+  if (!rideId || !mongoose.isValidObjectId(rideId)) {
+    return fail(res, 404, "Ride not found", "NOT_FOUND");
   }
 
-  // Graceful fallback for testing IDs like "ride_123"
+  const ride = await Ride.findById(rideId);
   if (!ride) {
-    ride = await Ride.findOne().sort({ createdAt: -1 });
+    return fail(res, 404, "Ride not found", "NOT_FOUND");
   }
 
-  if (ride) {
-    ride.driverId = assignedDriverId;
-    ride.status = "DRIVER_ASSIGNED";
-    await ride.save();
+  ride.driverId = assignedDriverId;
+  ride.status = "DRIVER_ASSIGNED";
+  await ride.save();
 
-    // Broadcast real-time driver assignment to rider
-    emitRideStatus(ride._id, ride.status);
-    emitDriverAssigned(ride.riderId, ride._id, driverUser, driverProfile?.vehicle, 3);
-  }
+  // Broadcast real-time driver assignment to rider
+  emitRideStatus(ride._id, ride.status);
+  emitDriverAssigned(ride.riderId, ride._id, driverUser, driverProfile?.vehicle, 3);
 
   return ok(res, {
     rideId: rideId,
@@ -453,81 +442,50 @@ router.patch("/admin/fare-rules/:id", requireAuth, allowRoles("admin"), asyncHan
   const ruleId = req.params.id;
   const updates = req.body || {};
 
+  const query = mongoose.isValidObjectId(ruleId)
+    ? { $or: [{ _id: ruleId }, { categoryId: ruleId }] }
+    : { categoryId: ruleId };
+
+  const updatedRule = await FareRule.findOneAndUpdate(query, updates, { new: true });
+  if (!updatedRule) {
+    return fail(res, 404, "Fare rule not found", "NOT_FOUND");
+  }
+
   await AuditLog.create({
     actorId: req.user._id,
     actorRole: req.user.role || "admin",
     actorName: req.user.fullName || "Admin",
     action: "FARE_RULE_UPDATED",
     resourceType: "FARE_RULE",
-    resourceId: ruleId,
+    resourceId: updatedRule._id,
     details: updates,
     status: "SUCCESS"
   }).catch(() => {});
 
-  return ok(res, {
-    ruleId,
-    id: ruleId,
-    updatedFields: updates,
-    status: "ACTIVE",
-    updatedAt: new Date().toISOString()
-  }, "Fare rule updated successfully");
+  return ok(res, updatedRule, "Fare rule updated successfully");
 }));
 
 router.get("/admin/fare-rules/:id", requireAuth, allowRoles("admin", "finance"), asyncHandler(async (req, res) => {
   const ruleId = req.params.id;
-  return ok(res, {
-    ruleId,
-    id: ruleId,
-    categoryId: ruleId === "auto" ? "auto" : (ruleId === "mini" ? "mini" : "moto"),
-    city: "Delhi NCR",
-    baseFare: 50,
-    baseFarePaise: 5000,
-    perKmRate: 12,
-    perKmPaise: 1200,
-    perMinuteRate: 2,
-    perMinutePaise: 200,
-    minimumFare: 80,
-    minimumFarePaise: 8000,
-    surgeMultiplier: 1.0,
-    status: "ACTIVE",
-    isActive: true,
-    updatedAt: new Date().toISOString()
-  }, "Fare rule retrieved successfully");
-}));
+  const query = mongoose.isValidObjectId(ruleId)
+    ? { $or: [{ _id: ruleId }, { categoryId: ruleId }] }
+    : { categoryId: ruleId };
 
-router.get("/admin/fare-rules", requireAuth, allowRoles("admin", "finance"), asyncHandler(async (req, res) => {
-  return ok(res, [
-    { id: "moto", categoryId: "moto", baseFare: 50, perKmRate: 12, perMinuteRate: 2, minimumFare: 80, surgeMultiplier: 1.0, isActive: true },
-    { id: "auto", categoryId: "auto", baseFare: 70, perKmRate: 15, perMinuteRate: 2.5, minimumFare: 100, surgeMultiplier: 1.0, isActive: true },
-    { id: "mini", categoryId: "mini", baseFare: 100, perKmRate: 18, perMinuteRate: 3, minimumFare: 150, surgeMultiplier: 1.0, isActive: true },
-    { id: "prime", categoryId: "prime", baseFare: 150, perKmRate: 22, perMinuteRate: 4, minimumFare: 200, surgeMultiplier: 1.0, isActive: true }
-  ], "Fare rules retrieved successfully");
+  const rule = await FareRule.findOne(query);
+  if (!rule) return fail(res, 404, "Fare rule not found", "NOT_FOUND");
+  return ok(res, rule, "Fare rule retrieved successfully");
 }));
 
 // Admin Document Verification Handler
 const handleDocumentVerification = asyncHandler(async (req, res) => {
   const docId = req.params.id || req.params.documentId;
-  let doc = null;
-
-  if (docId && mongoose.isValidObjectId(docId)) {
-    doc = await DriverDocument.findById(docId);
+  if (!docId || !mongoose.isValidObjectId(docId)) {
+    return fail(res, 404, "Driver document not found", "NOT_FOUND");
   }
 
-  // Graceful fallback if Postman placeholder like {{documentId}} was passed or ID not found
+  const doc = await DriverDocument.findById(docId);
   if (!doc) {
-    doc = await DriverDocument.findOne({ status: { $ne: "VERIFIED" } }).sort({ createdAt: -1 })
-      || await DriverDocument.findOne().sort({ createdAt: -1 });
-  }
-
-  // Ensure document exists
-  if (!doc) {
-    doc = await DriverDocument.create({
-      driverId: req.user._id,
-      documentType: "DRIVING_LICENSE",
-      documentUrl: "https://storage.readygo.internal/license-front.jpg",
-      fileUrl: "https://storage.readygo.internal/license-front.jpg",
-      status: "PENDING"
-    });
+    return fail(res, 404, "Driver document not found", "NOT_FOUND");
   }
 
   const rawStatus = (req.body.status || req.body.decision || req.body.verificationStatus || "VERIFIED").toString().trim().toUpperCase();
@@ -629,7 +587,7 @@ router.get("/admin/dashboard/stats", requireAuth, allowRoles("admin", "safety", 
 }));
 
 // Dynamic Fare Rules from MongoDB
-router.get("/admin/fare-rules", requireAuth, allowRoles("admin"), asyncHandler(async (req, res) => {
+router.get("/admin/fare-rules", requireAuth, allowRoles("admin", "finance"), asyncHandler(async (req, res) => {
   let rules = await FareRule.find().sort({ createdAt: 1 }).lean();
   if (rules.length === 0) {
     const defaults = [

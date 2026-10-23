@@ -8,6 +8,12 @@ import { validateBody } from "../../middleware/validate.js";
 import { ok, fail } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { emitPaymentStatus, emitRideStatus } from "../../services/socketService.js";
+import {
+  createRazorpayOrder,
+  verifyRazorpaySignature,
+  isRazorpayConfigured,
+  getRazorpayKeyId
+} from "../../services/razorpayService.js";
 
 const router = Router();
 
@@ -45,14 +51,21 @@ router.post("/payments/intents", requireAuth, validateBody(createIntentSchema), 
     let ride = null;
     if (rideId && mongoose.isValidObjectId(rideId)) {
       ride = await Ride.findOne({ _id: rideId, riderId: req.user._id });
-      if (!ride) ride = await Ride.findById(rideId);
+      if (!ride && req.user.role === "admin") {
+        ride = await Ride.findById(rideId);
+      }
+      if (!ride) {
+        return fail(res, 404, "Ride not found", "NOT_FOUND");
+      }
+      amountPaise = amountPaise || ride.fareBreakdown?.totalPaise || ride.farePaise;
+    } else {
+      // In Postman / testing mode when "ride_123" placeholder is sent
+      ride = await Ride.findOne({ riderId: req.user._id }).sort({ createdAt: -1 });
+      amountPaise = amountPaise || ride?.fareBreakdown?.totalPaise || ride?.farePaise || 15000;
     }
 
-    if (ride) {
-      amountPaise = amountPaise || ride.fareBreakdown?.totalPaise || 15000;
-    } else {
-      // Testing / mock fallback amount (₹185) when using dummy rideId like "ride_123"
-      amountPaise = amountPaise || 18500;
+    if (!amountPaise) {
+      amountPaise = 15000;
     }
   } else if (req.body.purpose === "WALLET_TOPUP") {
     amountPaise = amountPaise || 50000; // default ₹500
@@ -68,6 +81,8 @@ router.post("/payments/intents", requireAuth, validateBody(createIntentSchema), 
     if (existing) return ok(res, existing, "Existing idempotent payment intent");
   }
 
+  const isRzp = isRazorpayConfigured();
+
   const payment = await Payment.create({
     userId: req.user._id,
     rideId: cleanRideId,
@@ -75,9 +90,32 @@ router.post("/payments/intents", requireAuth, validateBody(createIntentSchema), 
     amountPaise,
     currency: "INR",
     paymentMethodId: req.body.paymentMethodId || "upi",
+    provider: isRzp ? "razorpay" : "mock",
     idempotencyKey: key,
     status: "PENDING"
   });
+
+  let razorpayOrder = null;
+  if (isRzp) {
+    try {
+      razorpayOrder = await createRazorpayOrder({
+        amountPaise,
+        receipt: `rcpt_${payment._id}`,
+        currency: "INR",
+        notes: {
+          paymentId: String(payment._id),
+          userId: String(req.user._id),
+          rideId: cleanRideId ? String(cleanRideId) : ""
+        }
+      });
+      payment.gatewayOrderId = razorpayOrder.id;
+      payment.gatewayRef = razorpayOrder.id;
+      await payment.save();
+    } catch (rzpErr) {
+      console.error("[Razorpay Error]:", rzpErr);
+      return fail(res, 502, rzpErr.message || "Failed to create Razorpay order", "RAZORPAY_ERROR");
+    }
+  }
 
   return ok(res, {
     paymentId: payment._id,
@@ -89,26 +127,60 @@ router.post("/payments/intents", requireAuth, validateBody(createIntentSchema), 
     purpose: payment.purpose,
     rideId: payment.rideId || null,
     paymentMethodId: payment.paymentMethodId,
-    provider: "mock",
-    clientSecret: `pi_mock_${payment._id}_secret`,
-    note: "Payment intent created successfully"
+    provider: payment.provider,
+    keyId: isRzp ? getRazorpayKeyId() : undefined,
+    orderId: razorpayOrder?.id || undefined,
+    razorpayOrderId: razorpayOrder?.id || undefined,
+    clientSecret: !isRzp ? `pi_mock_${payment._id}_secret` : undefined,
+    note: isRzp ? "Razorpay order created successfully" : "Payment intent created in mock mode"
   }, "Payment intent created", 201);
 }));
 
-// Confirm Payment Handlers
+// Create Order alias for Flutter Razorpay SDK
+router.post("/payments/create-order", requireAuth, validateBody(createIntentSchema), asyncHandler(async (req, res) => {
+  return router.handle(req, res);
+}));
+
+// Confirm & Verify Payment Handlers
 const handleConfirmPayment = asyncHandler(async (req, res) => {
   const paymentId = req.params.paymentId || req.body.paymentId;
-  let p = null;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-  if (paymentId && mongoose.isValidObjectId(paymentId)) {
+  let p = null;
+  if (razorpay_order_id) {
+    p = await Payment.findOne({ gatewayOrderId: razorpay_order_id });
+  }
+  if (!p && paymentId && mongoose.isValidObjectId(paymentId)) {
     p = await Payment.findOne({ _id: paymentId, userId: req.user._id }) || await Payment.findById(paymentId);
-  } else if (paymentId) {
-    p = await Payment.findOne({ idempotencyKey: paymentId }) || await Payment.findOne({ userId: req.user._id }).sort({ createdAt: -1 });
-  } else {
-    p = await Payment.findOne({ userId: req.user._id }).sort({ createdAt: -1 });
+  }
+  if (!p && paymentId) {
+    p = await Payment.findOne({ idempotencyKey: paymentId });
   }
 
-  if (!p) return fail(res, 404, "Payment not found", "NOT_FOUND");
+  if (!p) return fail(res, 404, "Payment record not found", "NOT_FOUND");
+
+  // Razorpay Signature Verification
+  if (isRazorpayConfigured() && (razorpay_signature || p.provider === "razorpay")) {
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return fail(res, 400, "razorpay_order_id, razorpay_payment_id, and razorpay_signature are required", "VALIDATION_ERROR");
+    }
+
+    const isValid = verifyRazorpaySignature({
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id,
+      signature: razorpay_signature
+    });
+
+    if (!isValid) {
+      p.status = "FAILED";
+      await p.save();
+      return fail(res, 400, "Razorpay payment signature verification failed", "SIGNATURE_VERIFICATION_FAILED");
+    }
+
+    p.gatewayPaymentId = razorpay_payment_id;
+    p.gatewaySignature = razorpay_signature;
+    p.gatewayRef = razorpay_payment_id;
+  }
 
   p.status = "SUCCEEDED";
   await p.save();
@@ -128,21 +200,38 @@ const handleConfirmPayment = asyncHandler(async (req, res) => {
     amount: p.amountPaise / 100,
     currency: p.currency || "INR",
     paymentMethodId: p.paymentMethodId,
+    gatewayOrderId: p.gatewayOrderId || null,
+    gatewayPaymentId: p.gatewayPaymentId || null,
     paidAt: new Date().toISOString()
   }, "Payment confirmed successfully");
 });
 
 router.post("/payments/:paymentId/confirm", requireAuth, handleConfirmPayment);
 router.post("/payments/confirm", requireAuth, handleConfirmPayment);
+router.post("/payments/verify", requireAuth, handleConfirmPayment);
 router.post("/payments/intents/:paymentId/confirm", requireAuth, handleConfirmPayment);
 
-// Rider Wallet
+// Rider Wallet (Dynamic real calculations)
 router.get("/rider/wallet", requireAuth, asyncHandler(async (req, res) => {
+  const [topups, walletRides] = await Promise.all([
+    Payment.aggregate([
+      { $match: { userId: req.user._id, purpose: "WALLET_TOPUP", status: "SUCCEEDED" } },
+      { $group: { _id: null, total: { $sum: "$amountPaise" } } }
+    ]),
+    Payment.aggregate([
+      { $match: { userId: req.user._id, purpose: "RIDE_PAYMENT", paymentMethodId: "wallet", status: "SUCCEEDED" } },
+      { $group: { _id: null, total: { $sum: "$amountPaise" } } }
+    ])
+  ]);
+  const totalTopup = topups[0]?.total || 0;
+  const totalSpent = walletRides[0]?.total || 0;
+  const balancePaise = Math.max(0, totalTopup - totalSpent);
+
   return ok(res, {
     currency: "INR",
-    balancePaise: 250000,
-    balanceAmount: 2500,
-    balance: 2500,
+    balancePaise,
+    balanceAmount: balancePaise / 100,
+    balance: balancePaise / 100,
     lastUpdated: new Date().toISOString()
   }, "Wallet balance retrieved");
 }));

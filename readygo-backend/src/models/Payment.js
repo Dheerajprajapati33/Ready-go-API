@@ -6,7 +6,11 @@ const schema = new mongoose.Schema({
   amountPaise: { type: Number, required: true, min: 0 },
   currency: { type: String, default: "INR" },
   paymentMethodId: String,
+  provider: { type: String, default: "razorpay" },
   gatewayRef: String,
+  gatewayOrderId: String,
+  gatewayPaymentId: String,
+  gatewaySignature: String,
   status: { type: String, enum: ["PENDING", "SUCCEEDED", "FAILED", "REFUNDED"], default: "PENDING", index: true },
   idempotencyKey: { type: String, index: true, sparse: true, unique: true }
 }, { timestamps: true });

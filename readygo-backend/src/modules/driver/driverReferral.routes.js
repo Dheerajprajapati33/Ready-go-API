@@ -29,54 +29,9 @@ async function ensureDriverReferralCode(user) {
   return code;
 }
 
-// Helper to seed a sample referral if driver is new so Postman queries work immediately
-async function ensureSampleReferrals(user) {
-  const count = await DriverReferral.countDocuments({ referrerDriverId: user._id });
-  if (count > 0) return;
-
-  // Create a dummy referred user if needed
-  let sampleReferred = await User.findOne({ phone: "+919876543999" });
-  if (!sampleReferred) {
-    sampleReferred = await User.create({
-      phone: "+919876543999",
-      role: "driver",
-      fullName: "Amit Kumar",
-      email: "amit.kumar@example.com",
-      status: "ACTIVE",
-      profileCompleted: true
-    });
-  }
-
-  await DriverReferral.create({
-    referralId: "ref_123",
-    referrerDriverId: user._id,
-    referredDriverId: sampleReferred._id,
-    referralCode: user.referralCode,
-    completedEligibleRides: 12,
-    requiredEligibleRides: DEFAULT_QUALIFICATION_RIDES,
-    rewardPerEligibleDriverPaise: DEFAULT_REWARD_PAISE,
-    referrerRewardStatus: "PENDING",
-    referredDriverRewardStatus: "PENDING"
-  });
-
-  await DriverReferral.create({
-    referralId: "ref_124",
-    referrerDriverId: user._id,
-    referredDriverId: sampleReferred._id,
-    referralCode: user.referralCode,
-    completedEligibleRides: 20,
-    requiredEligibleRides: DEFAULT_QUALIFICATION_RIDES,
-    rewardPerEligibleDriverPaise: DEFAULT_REWARD_PAISE,
-    referrerRewardStatus: "CREDITED",
-    referredDriverRewardStatus: "CREDITED",
-    creditedAt: new Date(Date.now() - 24 * 60 * 60 * 1000)
-  });
-}
-
 // 25.2.1 GET /driver/referrals/summary
 router.get("/driver/referrals/summary", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
   const referralCode = await ensureDriverReferralCode(req.user);
-  await ensureSampleReferrals(req.user);
 
   const [referredCount, creditedReferrals] = await Promise.all([
     DriverReferral.countDocuments({ referrerDriverId: req.user._id }),
@@ -98,7 +53,6 @@ router.get("/driver/referrals/summary", requireAuth, allowRoles("driver", "admin
 // 25.2.2 GET /driver/referrals
 router.get("/driver/referrals", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
   await ensureDriverReferralCode(req.user);
-  await ensureSampleReferrals(req.user);
 
   const page = Math.max(1, parseInt(req.query.page || "1", 10));
   const limit = Math.max(1, Math.min(50, parseInt(req.query.limit || "10", 10)));
@@ -166,36 +120,26 @@ router.post("/driver/referrals/validate", validateBody(validateCodeSchema), asyn
 }));
 
 async function resolveReferral(referralIdParam, user) {
-  const isPlaceholder =
-    !referralIdParam ||
-    referralIdParam === "{{referralId}}" ||
-    referralIdParam === "%7B%7BreferralId%7D%7D" ||
-    referralIdParam.includes("{{referralId}}") ||
-    referralIdParam === "ref_123";
+  if (!referralIdParam) return null;
 
-  if (isPlaceholder) {
-    let latest = await DriverReferral.findOne({ referrerDriverId: user._id }).sort({ createdAt: -1 });
+  if (referralIdParam.includes("{{") || referralIdParam === "ref_123") {
+    const latest = await DriverReferral.findOne({ referrerDriverId: user._id }).sort({ createdAt: -1 });
     if (latest) return latest;
   }
 
-  let referral = await DriverReferral.findOne({
-    $or: [
-      { referralId: referralIdParam },
-      { _id: referralIdParam.match(/^[0-9a-fA-F]{24}$/) ? referralIdParam : null }
-    ]
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(referralIdParam);
+  const conditions = [{ referralId: referralIdParam }];
+  if (isObjectId) conditions.push({ _id: referralIdParam });
+
+  return DriverReferral.findOne({
+    referrerDriverId: user._id,
+    $or: conditions
   });
-
-  if (!referral) {
-    referral = await DriverReferral.findOne({ referrerDriverId: user._id }).sort({ createdAt: -1 });
-  }
-
-  return referral;
 }
 
 // 25.2.4 GET /driver/referrals/:referralId
 router.get("/driver/referrals/:referralId", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
   await ensureDriverReferralCode(req.user);
-  await ensureSampleReferrals(req.user);
 
   let referral = await resolveReferral(req.params.referralId, req.user);
   if (referral && !referral.populated?.("referredDriverId")) {

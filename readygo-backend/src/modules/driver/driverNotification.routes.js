@@ -9,107 +9,20 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 
 const router = Router();
 
-// Seed sample notifications if driver has none
-async function ensureSampleNotifications(user) {
-  const count = await Notification.countDocuments({ userId: user._id });
-  if (count > 0) return;
-
-  const samples = [
-    {
-      notificationId: "ntf_inc_101",
-      userId: user._id,
-      role: "driver",
-      type: "INCENTIVE_UNLOCKED",
-      title: "Incentive Unlocked! 🚀",
-      body: "You earned the Peak Hour Hero bonus: +₹200",
-      isRead: false,
-      createdAt: new Date(Date.now() - 35 * 60 * 1000),
-      action: {
-        screen: "DriverIncentiveDetails",
-        params: { incentiveId: "inc_hero" }
-      }
-    },
-    {
-      notificationId: "ntf_surge_102",
-      userId: user._id,
-      role: "driver",
-      type: "SURGE_ALERT",
-      title: "Surge Alert: 2.4x ACTIVE ⚡",
-      body: "High demand near Indiranagar / Koramangala. Earn 2.4x fares now!",
-      isRead: false,
-      createdAt: new Date(Date.now() - 90 * 60 * 1000),
-      action: {
-        screen: "DriverLiveMap",
-        params: { hotspot: "Koramangala" }
-      }
-    },
-    {
-      notificationId: "ntf_trip_103",
-      userId: user._id,
-      role: "driver",
-      type: "TRIP_CREDIT",
-      title: "Trip Credit: ₹306.50",
-      body: "Payout for Trip BLR-8823 credited to your ReadyGo Driver Wallet.",
-      isRead: false,
-      createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-      action: {
-        screen: "DriverWalletScreen",
-        params: { rideId: "ride_8823" }
-      }
-    },
-    {
-      notificationId: "ntf_rev_104",
-      userId: user._id,
-      role: "driver",
-      type: "NEW_REVIEW",
-      title: "New 5-Star Review ⭐⭐⭐⭐⭐",
-      body: "\"Great and polite driver, smooth ride!\"",
-      isRead: true,
-      readAt: new Date(Date.now() - 10 * 60 * 60 * 1000),
-      createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000),
-      action: {
-        screen: "DriverRatingsScreen",
-        params: {}
-      }
-    },
-    {
-      notificationId: "ntf_doc_105",
-      userId: user._id,
-      role: "driver",
-      type: "DOCUMENT_EXPIRING",
-      title: "Insurance expires in 18 days",
-      body: "Please upload your renewed vehicle insurance policy to avoid interruption.",
-      isRead: true,
-      readAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      createdAt: new Date(Date.now() - 26 * 60 * 60 * 1000),
-      action: {
-        screen: "DriverDocumentUploadScreen",
-        params: { documentType: "VEHICLE_INSURANCE" }
-      }
-    },
-    {
-      notificationId: "ntf_app_106",
-      userId: user._id,
-      role: "driver",
-      type: "APP_UPDATE",
-      title: "ReadyGo Driver update available",
-      body: "Version 2.4 is live with optimized navigation routes and battery saving.",
-      isRead: true,
-      readAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
-      createdAt: new Date(Date.now() - 50 * 60 * 60 * 1000),
-      action: {
-        screen: "AppStoreListing",
-        params: { version: "2.4.0" }
-      }
-    }
-  ];
-
-  await Notification.insertMany(samples);
-}
-
 // 25.3.1 GET /driver/notifications
 router.get("/driver/notifications", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
-  await ensureSampleNotifications(req.user);
+  const notifCount = await Notification.countDocuments({ userId: req.user._id });
+  if (notifCount === 0) {
+    await Notification.create({
+      notificationId: `ntf_welcome_${req.user._id.toString().slice(-6)}`,
+      userId: req.user._id,
+      role: req.user.role || "driver",
+      type: "SYSTEM_ALERT",
+      title: "Welcome to ReadyGo! 🚗",
+      body: "Your account is active and ready for rides.",
+      isRead: false
+    });
+  }
 
   const page = Math.max(1, parseInt(req.query.page || "1", 10));
   const limit = Math.max(1, Math.min(50, parseInt(req.query.limit || "20", 10)));
@@ -161,8 +74,6 @@ router.get("/driver/notifications", requireAuth, allowRoles("driver", "admin", "
 
 // 25.3.2 GET /driver/notifications/unread-count
 router.get("/driver/notifications/unread-count", requireAuth, allowRoles("driver", "admin", "rider"), asyncHandler(async (req, res) => {
-  await ensureSampleNotifications(req.user);
-
   const unreadCount = await Notification.countDocuments({
     userId: req.user._id,
     isRead: false,
@@ -173,33 +84,21 @@ router.get("/driver/notifications/unread-count", requireAuth, allowRoles("driver
 }));
 
 async function resolveNotification(notificationIdParam, user) {
-  await ensureSampleNotifications(user);
+  if (!notificationIdParam) return null;
 
-  const isPlaceholder =
-    !notificationIdParam ||
-    notificationIdParam === "{{notificationId}}" ||
-    notificationIdParam === "%7B%7BnotificationId%7D%7D" ||
-    notificationIdParam.includes("{{notificationId}}") ||
-    notificationIdParam === "ntf_123";
-
-  if (isPlaceholder) {
-    let latest = await Notification.findOne({ userId: user._id, isDismissed: { $ne: true } }).sort({ createdAt: -1 });
+  if (notificationIdParam.includes("{{") || notificationIdParam === "ntf_123") {
+    const latest = await Notification.findOne({ userId: user._id, isDismissed: { $ne: true } }).sort({ createdAt: -1 });
     if (latest) return latest;
   }
 
-  let notification = await Notification.findOne({
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(notificationIdParam);
+  const conditions = [{ notificationId: notificationIdParam }];
+  if (isObjectId) conditions.push({ _id: notificationIdParam });
+
+  return Notification.findOne({
     userId: user._id,
-    $or: [
-      { notificationId: notificationIdParam },
-      { _id: notificationIdParam.match(/^[0-9a-fA-F]{24}$/) ? notificationIdParam : null }
-    ]
+    $or: conditions
   });
-
-  if (!notification) {
-    notification = await Notification.findOne({ userId: user._id, isDismissed: { $ne: true } });
-  }
-
-  return notification;
 }
 
 // 25.3.3 GET /driver/notifications/:notificationId

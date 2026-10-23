@@ -184,12 +184,6 @@ const handleAssignSafetyEvent = asyncHandler(async (req, res) => {
       || await SafetyEvent.findOne({ "eventTimeline._id": eventId });
   }
 
-  // Graceful fallback for active SOS incident
-  if (!event) {
-    event = await SafetyEvent.findOne({ status: { $ne: "RESOLVED" } }).sort({ createdAt: -1 })
-      || await SafetyEvent.findOne().sort({ createdAt: -1 });
-  }
-
   if (!event) return fail(res, 404, "Safety event not found", "NOT_FOUND");
 
   let responderId = req.body.responderId || req.body.agentId || req.body.userId;

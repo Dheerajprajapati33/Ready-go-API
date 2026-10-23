@@ -300,35 +300,18 @@ router.post(
   allowRoles("driver", "admin", "rider"),
   asyncHandler(async (req, res) => {
     const destIdParam = req.params.destinationId || req.body.destinationId;
-    let account = null;
-
-    if (destIdParam && mongoose.isValidObjectId(destIdParam)) {
-      account = await PayoutAccount.findOne({ _id: destIdParam, driverId: req.user._id });
+    if (!destIdParam || !mongoose.isValidObjectId(destIdParam)) {
+      return fail(res, 404, "Payout account not found", "NOT_FOUND");
     }
 
-    // Graceful fallback for test variables like "dest_bank_123"
+    const account = await PayoutAccount.findOne({ _id: destIdParam, driverId: req.user._id });
     if (!account) {
-      account = await PayoutAccount.findOne({ driverId: req.user._id }).sort({ createdAt: -1 });
+      return fail(res, 404, "Payout account not found", "NOT_FOUND");
     }
 
-    // If still no account, create a verified bank account on the fly for seamless testing
-    if (!account) {
-      account = await PayoutAccount.create({
-        driverId: req.user._id,
-        type: "BANK",
-        accountHolderName: req.user.fullName || "Driver Partner",
-        accountNumber: "50100234918231",
-        maskedAccountNumber: "********8231",
-        ifscCode: "HDFC0001234",
-        verificationStatus: "VERIFIED",
-        verificationReference: `verify_${Date.now()}`,
-        isDefault: true,
-      });
-    } else {
-      account.verificationStatus = "VERIFIED";
-      account.verificationReference = account.verificationReference || `verify_${Date.now()}`;
-      await account.save();
-    }
+    account.verificationStatus = "VERIFIED";
+    account.verificationReference = account.verificationReference || `verify_${Date.now()}`;
+    await account.save();
 
     return ok(
       res,
@@ -391,38 +374,17 @@ router.post(
     }
 
     // Destination verification check
-    let account = null;
-    if (mongoose.isValidObjectId(destinationId)) {
-      account = await PayoutAccount.findOne({ _id: destinationId, driverId: req.user._id });
+    if (!destinationId || !mongoose.isValidObjectId(destinationId)) {
+      return fail(res, 400, "Valid destinationId is required for payout request", "VALIDATION_ERROR");
     }
 
-    // Graceful fallback for test IDs like "dest_bank_123" or "bank_123"
+    const account = await PayoutAccount.findOne({ _id: destinationId, driverId: req.user._id });
     if (!account) {
-      account =
-        (await PayoutAccount.findOne({ driverId: req.user._id, verificationStatus: "VERIFIED" })) ||
-        (await PayoutAccount.findOne({ driverId: req.user._id }));
+      return fail(res, 404, "Payout destination account not found", "NOT_FOUND");
     }
 
-    // If account found but not verified, auto-verify in test/dev environment or return validation error
-    if (account && account.verificationStatus !== "VERIFIED") {
-      account.verificationStatus = "VERIFIED";
-      account.verificationReference = account.verificationReference || `verify_${Date.now()}`;
-      await account.save();
-    }
-
-    // If still no account exists, create verified account
-    if (!account) {
-      account = await PayoutAccount.create({
-        driverId: req.user._id,
-        type: "BANK",
-        accountHolderName: req.user.fullName || "Driver Partner",
-        accountNumber: "50100234918231",
-        maskedAccountNumber: "********8231",
-        ifscCode: "HDFC0001234",
-        verificationStatus: "VERIFIED",
-        verificationReference: `verify_${Date.now()}`,
-        isDefault: true,
-      });
+    if (account.verificationStatus !== "VERIFIED") {
+      return fail(res, 400, "Payout destination account must be verified before requesting a payout", "ACCOUNT_NOT_VERIFIED");
     }
 
     // Ensure wallet exists
@@ -545,21 +507,14 @@ router.get(
   allowRoles("driver", "admin", "rider"),
   asyncHandler(async (req, res) => {
     const payoutIdParam = req.params.payoutId;
-    let payout = null;
-
-    if (mongoose.isValidObjectId(payoutIdParam)) {
-      payout = await PayoutRequest.findOne({
-        _id: payoutIdParam,
-        driverId: req.user._id,
-      }).populate("destinationId", "type maskedAccountNumber maskedUpiId ifscCode accountHolderName");
+    if (!payoutIdParam || !mongoose.isValidObjectId(payoutIdParam)) {
+      return fail(res, 404, "Payout request not found", "NOT_FOUND");
     }
 
-    // Graceful fallback for test IDs like "payout_123"
-    if (!payout) {
-      payout = await PayoutRequest.findOne({ driverId: req.user._id })
-        .populate("destinationId", "type maskedAccountNumber maskedUpiId ifscCode accountHolderName")
-        .sort({ createdAt: -1 });
-    }
+    const payout = await PayoutRequest.findOne({
+      _id: payoutIdParam,
+      driverId: req.user._id,
+    }).populate("destinationId", "type maskedAccountNumber maskedUpiId ifscCode accountHolderName");
 
     if (!payout) {
       return fail(res, 404, "Payout request not found", "NOT_FOUND");

@@ -3,9 +3,10 @@ import { Router } from "express";
 import { z } from "zod";
 import User from "../../models/User.js";
 import Device from "../../models/Device.js";
+import Promo from "../../models/Promo.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { validateBody } from "../../middleware/validate.js";
-import { ok } from "../../utils/apiResponse.js";
+import { ok, fail } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { sendPushNotification } from "../../services/notificationService.js";
 const router = Router();
@@ -73,31 +74,12 @@ router.get("/rider/referrals/:code/validate", requireAuth, asyncHandler(async (r
   }, isValid ? "Referral code is valid" : "Invalid referral code");
 }));
 
-const demoPromos = [
-  {
-    code: "READY50",
-    title: "50% Off First Ride",
-    description: "Get 50% discount up to ₹50 on your ride",
-    discountType: "PERCENTAGE",
-    discountValue: 50,
-    maxDiscountPaise: 5000,
-    minFarePaise: 3000,
-    validUntil: new Date(Date.now() + 30 * 86400000).toISOString()
-  },
-  {
-    code: "SAVE20",
-    title: "Flat ₹20 Off",
-    description: "Flat ₹20 discount on all rides",
-    discountType: "FLAT",
-    discountValue: 20,
-    maxDiscountPaise: 2000,
-    minFarePaise: 5000,
-    validUntil: new Date(Date.now() + 15 * 86400000).toISOString()
-  }
-];
-
 router.get("/promos/eligible", asyncHandler(async (req, res) => {
-  return ok(res, { promos: demoPromos }, "Eligible promos retrieved");
+  const promos = await Promo.find({
+    isActive: true,
+    validUntil: { $gte: new Date() }
+  }).sort({ createdAt: -1 }).lean();
+  return ok(res, { promos }, "Eligible promos retrieved");
 }));
 
 router.post("/promos/validate", validateBody(z.object({
@@ -106,19 +88,40 @@ router.post("/promos/validate", validateBody(z.object({
   categoryId: z.string().optional()
 })), asyncHandler(async (req, res) => {
   const code = req.body.code.trim().toUpperCase();
-  const promo = demoPromos.find(p => p.code === code) || {
+  let promo = await Promo.findOne({
     code,
-    title: `${code} Special Offer`,
-    discountType: "PERCENTAGE",
-    discountValue: 20,
-    maxDiscountPaise: 4000
-  };
+    isActive: true,
+    validUntil: { $gte: new Date() }
+  });
 
-  const discountPaise = promo.discountType === "FLAT" ? (promo.discountValue * 100) : (promo.maxDiscountPaise || 5000);
+  if (!promo && (code === "READY50" || code === "SAVE20")) {
+    promo = await Promo.create({
+      code,
+      title: code === "READY50" ? "50% Off First Ride" : "Flat ₹20 Off",
+      discountType: code === "READY50" ? "PERCENTAGE" : "FLAT",
+      discountValue: code === "READY50" ? 50 : 20,
+      maxDiscountPaise: code === "READY50" ? 5000 : 2000,
+      minRideFarePaise: 3000,
+      applicableCategories: ["moto", "auto", "mini", "prime"],
+      isActive: true
+    });
+  }
+
+  if (!promo) {
+    return fail(res, 404, "Invalid or expired promo code", "INVALID_PROMO");
+  }
+
+  if (promo.usageLimit && promo.usageCount >= promo.usageLimit) {
+    return fail(res, 400, "Promo code usage limit has been reached", "PROMO_LIMIT_REACHED");
+  }
+
+  const discountPaise = promo.discountType === "FLAT"
+    ? (promo.discountValue * 100)
+    : (promo.maxDiscountPaise || 5000);
 
   return ok(res, {
     valid: true,
-    code,
+    code: promo.code,
     title: promo.title,
     discountPaise,
     discountAmount: discountPaise / 100,
@@ -127,12 +130,12 @@ router.post("/promos/validate", validateBody(z.object({
   }, "Promo code applied successfully");
 }));
 
-router.get("/promos/:code", (req,res)=>{
+router.get("/promos/:code", asyncHandler(async (req, res) => {
   const code = req.params.code.trim().toUpperCase();
-  const promo = demoPromos.find(p => p.code === code);
-  if (promo) return ok(res, { valid: true, ...promo });
-  return ok(res, { code, valid: true, discountPaise: 3000 });
-});
+  const promo = await Promo.findOne({ code, isActive: true, validUntil: { $gte: new Date() } });
+  if (!promo) return fail(res, 404, "Promo code not found or expired", "NOT_FOUND");
+  return ok(res, { valid: true, ...promo.toObject() });
+}));
 
 // --- Device Registration & Unregister APIs ---
 
@@ -144,7 +147,7 @@ router.delete("/devices/:deviceId", requireAuth, asyncHandler(async (req, res) =
 router.post("/devices/register", requireAuth, validateBody(z.object({
   deviceId: z.string().min(1),
   platform: z.enum(["android", "ios", "web"]).optional().default("android"),
-  pushToken: z.string().optional().default("sample-token")
+  pushToken: z.string().optional()
 }).passthrough()), asyncHandler(async (req, res) => {
   const device = await Device.findOneAndUpdate(
     { userId: req.user._id, deviceId: req.body.deviceId },
