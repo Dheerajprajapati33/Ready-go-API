@@ -93,7 +93,27 @@ export async function sendPushNotification(userId, { title, body, data = {} }) {
         title,
         body
       },
-      data: stringifiedData
+      data: stringifiedData,
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "readygo_high_importance_channel",
+          priority: "max",
+          defaultSound: true,
+          defaultVibrateTimings: true
+        }
+      },
+      apns: {
+        headers: {
+          "apns-priority": "10"
+        },
+        payload: {
+          aps: {
+            sound: "default",
+            contentAvailable: true
+          }
+        }
+      }
     });
 
     console.log(`[FCM] Push sent to user ${userId}: ${response.successCount} succeeded, ${response.failureCount} failed`);

@@ -25,7 +25,8 @@ export const verifyDriverDocument = (
   data: { status: 'VERIFIED' | 'REJECTED' | 'UNDER_REVIEW'; rejectionReason?: string; remarks?: string }
 ) => axiosClient.patch(`/admin/documents/${id}/verification`, data);
 
-export const getDriverDocuments = () => axiosClient.get('/admin/documents');
+export const getDriverDocuments = (params?: { driverId?: string; documentType?: string; status?: string }) =>
+  axiosClient.get('/admin/documents', { params });
 
 // Rides & Dispatch Operations API
 export const getAdminRides = (params?: {

@@ -13,6 +13,8 @@ import { validateBody } from "../../middleware/validate.js";
 import { ok, fail } from "../../utils/apiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { emitRideStatus, emitDriverOffer } from "../../services/socketService.js";
+import Notification from "../../models/Notification.js";
+import { sendPushNotification } from "../../services/notificationService.js";
 const router=Router();
 router.post("/rides", requireAuth, allowRoles("rider"), validateBody(z.object({
   quoteId: z.string().optional(),
@@ -54,7 +56,40 @@ router.post("/rides", requireAuth, allowRoles("rider"), validateBody(z.object({
 
   emitRideStatus(ride._id, ride.status);
   DriverProfile.find({ availability: "ONLINE" }).limit(10).then(drivers => {
-    drivers.forEach(d => emitDriverOffer(d.userId, ride._id, ride, "1.2 km", 30));
+    const fareAmount = Math.round((total || 5000) / 100);
+    const pickupAddr = pickup?.address || "Pickup Location";
+    const dropoffAddr = dropoff?.address || "Destination";
+
+    drivers.forEach(d => {
+      // 1. Realtime Socket.IO event for in-app popup
+      emitDriverOffer(d.userId, ride._id, ride, "1.2 km", 30);
+
+      // 2. Background FCM Push Notification for mobile device banner
+      sendPushNotification(d.userId, {
+        title: "🚖 New Ride Request!",
+        body: `Pickup: ${pickupAddr} • Drop: ${dropoffAddr} • Fare: ₹${fareAmount}`,
+        data: {
+          rideId: String(ride._id),
+          type: "RIDE_OFFER",
+          fareAmount: String(fareAmount),
+          screen: "RideOfferScreen"
+        }
+      }).catch(err => console.error("[FCM] Ride offer push error:", err.message));
+
+      // 3. Notification record in database
+      Notification.create({
+        notificationId: `ntf_offer_${ride._id.toString().slice(-6)}_${d.userId.toString().slice(-4)}_${Date.now()}`,
+        userId: d.userId,
+        role: "driver",
+        type: "RIDE_OFFER",
+        title: "New Ride Request",
+        body: `New ${categoryId.toUpperCase()} trip request: ${pickupAddr} to ${dropoffAddr} (₹${fareAmount})`,
+        action: {
+          screen: "RideOfferScreen",
+          params: { rideId: String(ride._id) }
+        }
+      }).catch(err => console.error("[DB] Ride offer notification create error:", err.message));
+    });
   }).catch(() => {});
 
   return ok(res, ride, "Ride requested; searching for nearby drivers", 201);

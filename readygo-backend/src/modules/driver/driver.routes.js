@@ -6,6 +6,7 @@ import DriverDocument from "../../models/DriverDocument.js";
 import Device from "../../models/Device.js";
 import User from "../../models/User.js";
 import Ride from "../../models/Ride.js";
+import Notification from "../../models/Notification.js";
 import { requireAuth, allowRoles } from "../../middleware/auth.js";
 import { validateBody } from "../../middleware/validate.js";
 import { ok, fail } from "../../utils/apiResponse.js";
@@ -697,6 +698,9 @@ const handleAcceptOffer = asyncHandler(async (req, res) => {
   const p = await profileFor(req.user);
 
   if (ride) {
+    if (ride.driverId && String(ride.driverId) !== String(req.user._id)) {
+      return fail(res, 409, "Ride has already been accepted by another driver", "ALREADY_ACCEPTED");
+    }
     if (["COMPLETED", "CANCELLED_BY_RIDER", "CANCELLED_BY_DRIVER"].includes(ride.status)) {
       return fail(res, 409, "Ride is no longer available", "STATE_CONFLICT");
     }
@@ -705,6 +709,39 @@ const handleAcceptOffer = asyncHandler(async (req, res) => {
     await ride.save();
     emitRideStatus(ride._id, ride.status);
     emitDriverAssigned(ride.riderId, ride._id, req.user, p?.vehicle, 3);
+
+    // 1. Mobile Background FCM Push Notification to Rider
+    const driverName = req.user.fullName || "Your driver";
+    const vehicleModel = p?.vehicle?.model || "Vehicle";
+    const vehiclePlate = p?.vehicle?.plateNumber || "DL 01 AB 1234";
+
+    if (ride.riderId) {
+      sendPushNotification(ride.riderId, {
+        title: "✅ Driver Assigned!",
+        body: `${driverName} accepted your ride (${vehicleModel} - ${vehiclePlate}). Arriving in 3 mins.`,
+        data: {
+          rideId: String(ride._id),
+          driverId: String(req.user._id),
+          type: "DRIVER_ASSIGNED",
+          screen: "LiveRideTrackingScreen"
+        }
+      }).catch(err => console.error("[FCM] Driver assigned push error:", err.message));
+
+      // 2. Notification record in database for Rider Inbox
+      Notification.create({
+        notificationId: `ntf_assigned_${ride._id.toString().slice(-6)}_${Date.now()}`,
+        userId: ride.riderId,
+        role: "rider",
+        type: "DRIVER_ASSIGNED",
+        title: "Driver Assigned",
+        body: `${driverName} has accepted your trip request (${vehiclePlate}). ETA: 3 mins.`,
+        action: {
+          screen: "LiveRideTrackingScreen",
+          params: { rideId: String(ride._id) }
+        }
+      }).catch(err => console.error("[DB] Driver assigned notification create error:", err.message));
+    }
+
     return ok(res, { offerId: req.params.offerId, rideId: ride._id, status: ride.status, ride }, "Offer accepted");
   }
 
@@ -744,6 +781,32 @@ router.post("/driver/rides/:rideId/arrived", requireAuth, allowRoles("driver", "
   ride.status = "DRIVER_ARRIVED";
   await ride.save();
   emitRideStatus(ride._id, ride.status);
+
+  if (ride.riderId) {
+    sendPushNotification(ride.riderId, {
+      title: "📍 Driver Arrived!",
+      body: `${req.user.fullName || "Your driver"} has arrived at the pickup location.`,
+      data: {
+        rideId: String(ride._id),
+        type: "DRIVER_ARRIVED",
+        screen: "LiveRideTrackingScreen"
+      }
+    }).catch(err => console.error("[FCM] Driver arrived push error:", err.message));
+
+    Notification.create({
+      notificationId: `ntf_arrived_${ride._id.toString().slice(-6)}_${Date.now()}`,
+      userId: ride.riderId,
+      role: "rider",
+      type: "DRIVER_ARRIVED",
+      title: "Driver Arrived",
+      body: `${req.user.fullName || "Your driver"} is waiting at the pickup location.`,
+      action: {
+        screen: "LiveRideTrackingScreen",
+        params: { rideId: String(ride._id) }
+      }
+    }).catch(err => console.error("[DB] Driver arrived notification create error:", err.message));
+  }
+
   return ok(res, ride, "Driver arrived at pickup location");
 }));
 
@@ -794,6 +857,33 @@ router.post("/driver/rides/:rideId/complete", requireAuth, allowRoles("driver", 
   ride.completedAt = new Date();
   await ride.save();
   emitRideStatus(ride._id, ride.status);
+
+  if (ride.riderId) {
+    const totalFare = ride.fareBreakdown?.totalPaise ? (ride.fareBreakdown.totalPaise / 100) : 50;
+    sendPushNotification(ride.riderId, {
+      title: "🏁 Trip Completed!",
+      body: `You have reached your destination. Total fare: ₹${totalFare}. Thank you for riding with ReadyGo!`,
+      data: {
+        rideId: String(ride._id),
+        type: "TRIP_COMPLETED",
+        screen: "RideReceiptScreen"
+      }
+    }).catch(err => console.error("[FCM] Trip completed push error:", err.message));
+
+    Notification.create({
+      notificationId: `ntf_completed_${ride._id.toString().slice(-6)}_${Date.now()}`,
+      userId: ride.riderId,
+      role: "rider",
+      type: "TRIP_COMPLETED",
+      title: "Trip Completed",
+      body: `Your trip has ended. Total fare: ₹${totalFare}.`,
+      action: {
+        screen: "RideReceiptScreen",
+        params: { rideId: String(ride._id) }
+      }
+    }).catch(err => console.error("[DB] Trip completed notification create error:", err.message));
+  }
+
   return ok(res, ride, "Ride completed successfully");
 }));
 

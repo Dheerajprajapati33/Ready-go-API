@@ -78,11 +78,19 @@ router.get("/admin/driver-applications", requireAuth, allowRoles("admin", "safet
     DriverProfile.countDocuments(filter)
   ]);
 
+  const userIds = profiles.map(p => {
+    return (p.userId && typeof p.userId === "object" && p.userId._id) ? p.userId._id : p.userId;
+  }).filter(Boolean);
+
+  const documents = await DriverDocument.find({ driverId: { $in: userIds } }).sort({ createdAt: -1 }).lean();
+
   const formattedItems = profiles.map(p => {
     const rawUserId = (p.userId && typeof p.userId === "object" && p.userId._id)
       ? p.userId._id
       : p.userId;
     const driverUser = (p.userId && typeof p.userId === "object" && p.userId._id) ? p.userId : null;
+    const driverDocs = documents.filter(d => d.driverId?.toString() === rawUserId?.toString());
+
     return {
       id: p._id,
       _id: p._id,
@@ -97,6 +105,7 @@ router.get("/admin/driver-applications", requireAuth, allowRoles("admin", "safet
       vehicle: p.vehicle || {},
       applicationStatus: p.applicationStatus,
       status: p.applicationStatus,
+      documents: driverDocs,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt
     };
@@ -111,7 +120,13 @@ router.get("/admin/driver-applications/:id", requireAuth, allowRoles("admin"), a
   }
   const p = await DriverProfile.findById(req.params.id).populate("userId", "fullName phone email");
   if (!p) return fail(res, 404, "Application not found", "NOT_FOUND");
-  return ok(res, p);
+  const rawUserId = (p.userId && typeof p.userId === "object" && p.userId._id) ? p.userId._id : p.userId;
+  const docs = await DriverDocument.find({ driverId: rawUserId }).sort({ createdAt: -1 });
+  const appObj = p.toObject ? p.toObject() : p;
+  return ok(res, {
+    ...appObj,
+    documents: docs
+  });
 }));
 
 router.post("/admin/driver-applications/:id/review", requireAuth, allowRoles("admin"), asyncHandler(async (req, res) => {
@@ -551,7 +566,11 @@ router.get("/admin/documents/:id", requireAuth, allowRoles("admin", "safety"), a
 }));
 
 router.get("/admin/documents", requireAuth, allowRoles("admin", "safety"), asyncHandler(async (req, res) => {
-  const docs = await DriverDocument.find().sort({ createdAt: -1 }).limit(100);
+  const filter = {};
+  if (req.query.driverId) filter.driverId = req.query.driverId;
+  if (req.query.documentType) filter.documentType = req.query.documentType;
+  if (req.query.status) filter.status = req.query.status;
+  const docs = await DriverDocument.find(filter).sort({ createdAt: -1 }).limit(100);
   return ok(res, docs, "Driver documents retrieved");
 }));
 

@@ -32,6 +32,11 @@ const NotificationSchema = new mongoose.Schema(
         "REFERRAL_REWARD",
         "SUPPORT_UPDATE",
         "GENERAL",
+        "RIDE_OFFER",
+        "DRIVER_ASSIGNED",
+        "DRIVER_ARRIVED",
+        "TRIP_COMPLETED",
+        "TRIP_UPDATE"
       ],
       required: true,
       index: true,
